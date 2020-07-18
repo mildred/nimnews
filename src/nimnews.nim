@@ -21,7 +21,6 @@ import ./nntp
 import ./parse_nntp
 import ./process_nntp
 import ./database
-#import ./crypto
 
 let args = docopt(doc)
 let
@@ -29,9 +28,6 @@ let
   arg_db     = $args["--db"]
   arg_fqdn   = $args["--fqdn"]
   arg_secure = args["--secure"]
-  #arg_crypto = CryptoSettings(
-  #  cert_file_pem: $args["--cert"],
-  #  skey_file_pem: $args["--skey"])
 
 when defined(ssl):
   let arg_crypto =
