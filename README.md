@@ -13,6 +13,8 @@ Implementation status:
 - [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] (missing user database yet!)
 - [RFC-850]: Message structure, control messages, not implemented at all except very basic parsing of headers and body following mostly [RFC-822]
 
+Goals: I'm writing this in hope to link it with mailman so mailing lists can be mirrored to newsgroups.
+
 Build
 -----
 
