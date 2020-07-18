@@ -23,9 +23,26 @@ You can omit `-d:ssl` if you don't want to compile in STARTTLS support.
 Run
 ---
 
+Try it out:
+
     src/nimnews -p 1119 -f example.org --secure
 
 You need to provide the fully qualified domain name as command-line argument (mandatory) and the port number defaults to 119 (you need to be root). You can tell nimnews that you have a TLS tunneling and it can safely receive passwords in clear using `--secure` or you can configure STARTTLS with `--cert` and `--skey` (untested yet). use `--help` for full help message.
+
+```
+Nimnews is a simple newsgroup NNTP server
+
+Usage: nimnews [options]
+
+Options:
+  -h, --help          Print help
+  -p, --port <port>   Specify a different port [default: 119]
+  -d, --db <file>     Database file [default: ./nimnews.sqlite]
+  -f, --fqdn <fqdn>   Fully qualified domain name
+  -s, --secure        Indicates that the connection is already encrypted
+  --cert <pemfile>    PEM certificate for STARTTLS
+  --skey <pemfile>    PEM secret key for STARTTLS
+```
 
 [RFC-977]: https://tools.ietf.org/html/rfc977
 [RFC-3977]: https://tools.ietf.org/html/rfc3977
