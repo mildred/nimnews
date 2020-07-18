@@ -1,7 +1,7 @@
 NimNews
 =======
 
-Nim newsgroup NNTP server
+Immature Newsgroup NNTP server using Nim and SQLite
 
 The goal of this server is to provide a flexible NNTP interface to whatever you want. Articles are stored in SQLite and the server itself is simple enough to be flexible if you need it to be.
 
