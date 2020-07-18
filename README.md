@@ -11,6 +11,7 @@ Implementation status:
 - [RFC-3977] in implemented in part (missing XOVER kind of requests and many others)
 - [RFC-4642]: STARTTLS extension is drafted (not tested, might not be secure)
 - [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] (missing user database yet!)
+- [RFC-850]: Message structure, control messages, not implemented at all except very basic parsing of headers and body following mistly [RFC-822]
 
 Build
 -----
@@ -44,6 +45,8 @@ Options:
   --skey <pemfile>    PEM secret key for STARTTLS
 ```
 
+[RFC-822]: https://tools.ietf.org/html/rfc822
+[RFC-850]: https://tools.ietf.org/html/rfc850
 [RFC-977]: https://tools.ietf.org/html/rfc977
 [RFC-3977]: https://tools.ietf.org/html/rfc3977
 [RFC-4616]: https://tools.ietf.org/html/rfc4616
