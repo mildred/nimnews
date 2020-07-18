@@ -10,7 +10,7 @@ Implementation status:
 - [RFC-977] should be implemented in full
 - [RFC-3977] in implemented in part (missing XOVER kind of requests and many others)
 - [RFC-4642]: STARTTLS extension is drafted (not tested, might not be secure)
-- [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] (missing user database yet!)
+- [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] [RFC-5802] (missing user database yet!)
 - [RFC-850]: Message structure, control messages, not implemented at all except very basic parsing of headers and body following mostly [RFC-822]
 
 Goals: I'm writing this in hope to link it with mailman so mailing lists can be mirrored to newsgroups.
@@ -54,4 +54,5 @@ Options:
 [RFC-4616]: https://tools.ietf.org/html/rfc4616
 [RFC-4642]: https://tools.ietf.org/html/rfc4642
 [RFC-4643]: https://tools.ietf.org/html/rfc4643
+[RFC-5802]: https://tools.ietf.org/html/rfc5802
 [SCRAM]: https://nimble.directory/pkg/scram

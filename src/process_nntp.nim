@@ -53,10 +53,10 @@ proc processCapabilities(cx: CxState, cmd: Command, db: DbConn): Response =
   if not cx.auth:
     if cx.secure:
       capabilities.add("AUTHINFO USER SASL")
-      capabilities.add("SASL SCRAM PLAIN")
+      capabilities.add("SASL SCRAM-SHA-256 PLAIN")
     else:
       capabilities.add("AUTHINFO SASL")
-      capabilities.add("SASL SCRAM")
+      capabilities.add("SASL SCRAM-SHA-256")
 
   return Response(code: "101", text: "Capability list follows", content: some(capabilities.join(CRLF)))
 
