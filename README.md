@@ -3,14 +3,14 @@ NimNews
 
 Immature Newsgroup NNTP server using Nim and SQLite
 
-The goal of this server is to provide a flexible NNTP interface to whatever you want. Articles are stored in SQLite and the server itself is simple enough to be flexible if you need it to be.
+The goal of this server is to provide a flexible NNTP interface to whatever you want. Articles are stored in SQLite and the server itself is simple enough to be flexible if you need it to be. It is not designed to peer with Usenet although it could be considered for a future improvement. No policy is implemented and all commands are accepted even to logged-out users
 
 Implementation status:
 
 - [RFC-977] should be implemented in full
-- [RFC-3977] in implemented in part (missing XOVER kind of requests)
-- [RFC-4642]: STARTTLS extension is drafted
-- [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM]
+- [RFC-3977] in implemented in part (missing XOVER kind of requests and many others)
+- [RFC-4642]: STARTTLS extension is drafted (not tested, might not be secure)
+- [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] (missing user database yet!)
 
 Build
 -----
