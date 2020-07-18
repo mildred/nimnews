@@ -1,0 +1,3 @@
+type
+  SaslPlain = ref object
+    
