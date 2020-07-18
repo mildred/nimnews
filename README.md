@@ -11,7 +11,7 @@ Implementation status:
 - [RFC-3977] in implemented in part (missing XOVER kind of requests and many others)
 - [RFC-4642]: STARTTLS extension is drafted (not tested, might not be secure)
 - [RFC-4643]: AUTH extension is drafted with USER/PASS, SASL PLAIN ([RFC-4616]) and SASL [SCRAM] (missing user database yet!)
-- [RFC-850]: Message structure, control messages, not implemented at all except very basic parsing of headers and body following mistly [RFC-822]
+- [RFC-850]: Message structure, control messages, not implemented at all except very basic parsing of headers and body following mostly [RFC-822]
 
 Build
 -----
@@ -19,7 +19,7 @@ Build
     nimble install -d
     nim c -d:ssl src/nimnews
 
-You can omit `-d:ssl` if you don't want to compile in STARTTLS support.
+You can omit `-d:ssl` if you don't want to compile with STARTTLS support.
 
 Run
 ---
