@@ -9,12 +9,12 @@ Options:
   -d, --db <file>     Database file [default: ./nimnews.sqlite]
   -f, --fqdn <fqdn>   Fully qualified domain name
   -s, --secure        Indicates that the connection is already encrypted
+  --log               Log traffic
 """ & (when not defined(ssl): "" else: """
   --cert <pemfile>    PEM certificate for STARTTLS
   --skey <pemfile>    PEM secret key for STARTTLS
 """)
 
-import db_sqlite
 import asyncnet, asyncdispatch, net
 import strutils, docopt, strformat, options
 import ./nntp
@@ -28,6 +28,7 @@ let
   arg_db     = $args["--db"]
   arg_fqdn   = $args["--fqdn"]
   arg_secure = args["--secure"]
+  arg_log    = args["--log"]
 
 when defined(ssl):
   let arg_crypto =
@@ -44,26 +45,32 @@ if arg_fqdn == "":
   quit(1)
 
 var clients {.threadvar.}: seq[AsyncSocket]
+let welcome = &"200 nimnews server ready"
 
-proc processClient(client0: AsyncSocket, db: DbConn) {.async.} =
-  #var tls = new TLS
-  #defer:
-  #  tls.stopTLS()
+proc processClient(client0: AsyncSocket) {.async.} =
+  var db: Db = connect(arg_db, arg_fqdn)
+  defer: db.close()
   var client = client0
-  await client.send(&"200 nimnews server ready{CRLF}")
+  db.create_views()
+  db.add_anonymous_readme()
+
+  await client.send(&"{welcome}{CRLF}")
+  if arg_log: echo &"> {welcome}"
   let cx: CxState = create(
     fqdn = arg_fqdn,
     secure = arg_secure,
     starttls = when defined(ssl): arg_crypto != nil else: false)
   while true:
     let line = await client.recvLine()
+    if arg_log: echo &"< {line}"
     let command = parse_nntp(line)
     var response = cx.process(command, none(string), db)
-    await response.send(client)
+    await response.send(client, log=arg_log)
     while response.expect_body or response.expect_line:
       var data = ""
       while true:
         var dataline = await client.recvLine()
+        if arg_log: echo &"< {dataline}"
         if response.expect_line:
           data = dataline
           break
@@ -76,23 +83,24 @@ proc processClient(client0: AsyncSocket, db: DbConn) {.async.} =
         else:
           data = data & dataline & CRLF
       response = cx.process(command, some data, db)
-      await response.send(client)
+      await response.send(client, log = arg_log)
     if response.quit:
       break
     when defined(ssl):
       if response.starttls:
         wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
-        #tls = startTLS(arg_crypto, client):
-        #if not tls.isOk:
-        #  break # TLS failed, disconnect
+
+proc ensure_db_migrated(): bool =
+  echo &"Opening database {arg_db}"
+  var db: Db = connect(arg_db, arg_fqdn)
+  defer: db.close()
+  if not migrate(db.conn):
+    echo "Invalid database"
+    return false
+  return true
 
 proc serve() {.async.} =
-  echo &"Opening database {arg_db}"
-  var db: DbConn = db_sqlite.open(arg_db, "", "", "")
-  defer: db.close()
-  if not migrate(db):
-    echo "Invalid database"
-    return
+  if not ensure_db_migrated(): return
 
   clients = @[]
   var server = newAsyncSocket()
@@ -103,7 +111,7 @@ proc serve() {.async.} =
   while true:
     let client = await server.accept()
     clients.add client
-    asyncCheck processClient(client, db)
+    asyncCheck processClient(client)
 
 asyncCheck serve()
 runForever()

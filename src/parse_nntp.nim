@@ -15,4 +15,4 @@ proc parse_nntp*(line: string): Command =
     name = line.toUpper()
     args = ""
   let cmd = parseEnum[CommandKind](name, CommandNone)
-  return Command(command: cmd, args: args)
+  return Command(command: cmd, cmd_name: name, args: args)

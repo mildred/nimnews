@@ -3,6 +3,8 @@ import options, strutils, strformat, times
 import ./nntp
 import ./database
 import ./auth
+import ./wildmat
+import ./database
 
 type
   Mode = enum
@@ -40,6 +42,11 @@ proc processHelp(cx: CxState, cmd: Command, db: DbConn): Response =
   ihave <message-id>              - offer to provide given article
   post                            - post a new article
   next                            - move to the previous article in time""".split("\n").join(CRLF)))
+
+const serverDateFormat: TimeFormat = initTimeFormat("yyyyMMddHHmmss")
+
+proc processDate(cx: CxState, cmd: Command, db: DbConn): Response =
+  return Response(code: "111", text: now().format(serverDateFormat))
 
 proc processCapabilities(cx: CxState, cmd: Command, db: DbConn): Response =
   var capabilities = @[
@@ -167,7 +174,7 @@ proc processGroup(cx: CxState, cmd: Command, db: DbConn): Response =
       last = "0"
     cx.cur_group_name  = some grp[0]
     cx.cur_article_num = some parse_int(first)
-    return Response(code: "411", text: &"{count} {first} {last} {grp[0]} group selected (count={count}, first={first}, last={last})")
+    return Response(code: "211", text: &"{count} {first} {last} {grp[0]} group selected (count={count}, first={first}, last={last})")
 
 proc processDateTime(args: var seq[string]): Option[times.DateTime] =
   if len(args) < 2:
@@ -199,15 +206,27 @@ proc processNewGroups(cx: CxState, cmd: Command, db: DbConn): Response =
     return Response(code: "501", text: "syntax error, missing date")
 
   let distributions = if len(args) > 0: args[0] else: ""
-  if distributions != "" and distributions != "*":
-    return Response(code: "503", text: "NEWGROUP distributions not supported except *")
 
-  let groups = db.getAllRows(sql"""
-    SELECT    groups.name, COUNT(group_articles.number), MIN(group_articles.number), MAX(group_articles.number)
-    FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
-    WHERE     groups.created_at >= ?
-    GROUP BY  groups.name
-  """, dt.get.format(dbTimeFormat))
+  var groups: seq[Row]
+
+  if distributions == "" or distributions == "*":
+    groups = db.getAllRows(sql"""
+      SELECT    groups.name, COUNT(group_articles.number), MIN(group_articles.number), MAX(group_articles.number)
+      FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
+      WHERE     groups.created_at >= ?
+      GROUP BY  groups.name
+    """, dt.get.format(dbTimeFormat))
+
+  else:
+    let wildmat = parse_wildmat(distributions)
+    let wildmat_expr = wildmat.to_sql_nocase("group.name")
+    groups = db.getAllRows(sql(&"""
+      SELECT    groups.name, COUNT(group_articles.number), MIN(group_articles.number), MAX(group_articles.number)
+      FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
+      WHERE     groups.created_at >= ? AND
+                {wildmat_expr}
+      GROUP BY  groups.name
+    """), dt.get.format(dbTimeFormat))
 
   return Response(code: "231", text: "list of newsgroups follows", content: some(getGroupList(groups)))
 
@@ -218,8 +237,6 @@ proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response =
   if dt.isNone:
     return Response(code: "501", text: "syntax error, missing date")
   let distributions = if len(args) > 0: args[0] else: ""
-  if distributions != "" and distributions != "*":
-    return Response(code: "503", text: "NEWNEWS distributions not supported except *")
 
   var news: seq[Row]
   if distributions == "":
@@ -233,18 +250,99 @@ proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response =
                 group_articles = ? COLLATE NOCASE
     """, dt.get.format(dbTimeFormat), group_name)
 
-  else:
+  elif distributions == "*":
     news = db.getAllRows(sql"""
       SELECT    articles.message_id
       FROM      articles
       WHERE     articles.created_at >= ?
     """, dt.get.format(dbTimeFormat))
 
+  else:
+    let wildmat = parse_wildmat(distributions)
+    let wildmat_expr = wildmat.to_sql_nocase("group_articles")
+    news = db.getAllRows(sql(&"""
+      SELECT    DISTINCT articles.message_id
+      FROM      articles JOIN group_articles ON group_articles.article_id = articles.id
+      WHERE     articles.created_at >= ? AND
+                {wildmat_expr}
+    """), dt.get.format(dbTimeFormat))
+
   var list = ""
   for row in news:
     list = list & &"{row[0]}{CRLF}"
 
   return Response(code: "230", text: "list of new articles by message-id follows", content: some(list))
+
+proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
+
+  var arts: seq[Row]
+  if cmd.args.len > 0 and cmd.args[0] == '<':
+    if cx.cur_group_name.isNone:
+      arts = db.getAllRows(sql"""
+        SELECT  0, articles.message_id, articles.headers,
+                2+length(articles.headers || articles.body),
+                1+length(articles.headers || articles.body)-length(replace(articles.headers || articles.body, char(10), ''))
+        FROM    articles
+        WHERE   articles.message_id = ?
+        ORDER BY group_articles.number ASC
+      """, cmd.args)
+    else:
+      arts = db.getAllRows(sql"""
+        SELECT  COALESCE(group_articles.number, 0), articles.message_id, articles.headers,
+                2+length(articles.headers || articles.body),
+                1+length(articles.headers || articles.body)-length(replace(articles.headers || articles.body, char(10), ''))
+        FROM    articles LEFT OUTER JOIN group_articles
+                ON group_articles.article_id == articles.id AND
+                   group_articles.group_name = ? COLLATE NOCASE
+        WHERE   articles.message_id = ?
+        ORDER BY group_articles.number ASC
+      """, cmd.args, cx.cur_group_name.get)
+
+  else:
+    if cx.cur_group_name.isNone:
+      return Response(code: "412", text: "no newsgroup has been selected")
+    var first, last: Option[int]
+    parse_range(cmd.args, first, last)
+
+    if first.is_none and last.is_none:
+      if cx.cur_article_num.isNone:
+        return Response(code: "420", text: "no current article has been selected")
+      first = cx.cur_article_num
+      last  = cx.cur_article_num
+
+    let lower_bound =
+      if first.is_some: &"group_articles.number >= {first.get}"
+      else: "TRUE"
+
+    let upper_bound =
+      if last.is_some: &"group_articles.number <= {last.get}"
+      else: "TRUE"
+
+    arts = db.getAllRows(sql(&"""
+      SELECT  group_articles.number, articles.message_id, articles.headers,
+              2+length(articles.headers || articles.body),
+              1+length(articles.headers || articles.body)-length(replace(articles.headers || articles.body, char(10), ''))
+      FROM    group_articles JOIN articles ON group_articles.article_id == articles.id
+      WHERE   {lower_bound} AND
+              {upper_bound} AND
+              group_articles.group_name = ? COLLATE NOCASE
+      ORDER BY group_articles.number ASC
+    """), cx.cur_group_name.get)
+
+  var overview: seq[string]
+  for art in arts:
+    var subject, from_h, date, references: string
+    for head in parse_headers(art[2]):
+      let h = head.parse_header
+      case h.name.toLower
+      of "subject":    subject    = h.value
+      of "from":       from_h     = h.value
+      of "date":       date       = h.value
+      of "references": references = if references == "": h.value else: &"{references} {h.value}"
+      else:            discard
+    overview.add([art[0], subject, from_h, date, art[1], references, art[3], art[4]].join("\t"))
+
+  return Response(code: "224", text: &"Overview information follows", content: some overview.join(CRLF))
 
 proc processArticle(cx: CxState, cmd: Command, db: DbConn): Response =
   if cx.cur_group_name.isNone:
@@ -340,16 +438,19 @@ proc processNext(cx: CxState, cmd: Command, db: DbConn): Response =
 
 proc insertArticle(article: Article, db: DbConn) =
     let article_id = db.insertID(sql"""
-      INSERT INTO articles (message_id, headers, body) VALUES (?, ?, ?)
+      INSERT INTO t_articles (message_id, headers, body) VALUES (?, ?, ?)
     """, article.message_id, article.head, article.body)
     for group_name in article.newsgroups:
       db.exec(sql"""
-        INSERT INTO groups (name)
+        INSERT INTO t_groups (name)
         SELECT ?
         WHERE NOT EXISTS (SELECT * FROM groups WHERE name = ? COLLATE NOCASE)
       """, group_name, group_name)
       db.exec(sql"""
-        INSERT INTO group_articles (article_id, group_name, number)
+        INSERT INTO t_group_perms (group_name, acl_id, allow) VALUES (?, ?, TRUE)
+      """, group_name, default_acl_id)
+      db.exec(sql"""
+        INSERT INTO t_group_articles (article_id, group_name, number)
         SELECT    ?, groups.name, COALESCE(MAX(group_articles.number)+1, 1)
         FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
         WHERE     groups.name = ? COLLATE NOCASE
@@ -400,39 +501,44 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
     insertArticle(article, db)
     return Response(code: "240", text: "article posted ok")
 
-proc process*(cx: CxState, cmd: Command, data: Option[string], db: DbConn): Response =
+proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command
   of CommandNone:
+    echo &"Client wanted command {cmd.cmd_name} {cmd.args}"
     return Response(code: "500", text: "command not recognized")
   of CommandQUIT:
     return Response(code: "205", text: "closing connection - goodbye!", quit: true)
   of CommandCAPABILITIES:
-    return cx.processCapabilities(cmd, db)
+    return cx.processCapabilities(cmd, db.conn)
   of CommandSTARTTLS:
-    return cx.processStartTLS(cmd, db)
+    return cx.processStartTLS(cmd, db.conn)
   of CommandAUTHINFO:
-    return cx.processAuth(cmd, data, db)
+    return cx.processAuth(cmd, data, db.conn)
   of CommandMODE:
-    return cx.processMode(cmd, db)
+    return cx.processMode(cmd, db.conn)
   of CommandHELP:
-    return cx.processHelp(cmd, db)
+    return cx.processHelp(cmd, db.conn)
+  of CommandDATE:
+    return cx.processDate(cmd, db.conn)
   of CommandLIST:
-    return cx.processList(cmd, db)
+    return cx.processList(cmd, db.conn)
   of CommandGROUP:
-    return cx.processGroup(cmd, db)
+    return cx.processGroup(cmd, db.conn)
   of CommandNEWGROUPS:
-    return cx.processNewGroups(cmd, db)
+    return cx.processNewGroups(cmd, db.conn)
   of CommandNEWNEWS:
-    return cx.processNewNews(cmd, db)
+    return cx.processNewNews(cmd, db.conn)
+  of CommandXOVER, CommandOVER:
+    return cx.processOver(cmd, db.conn)
   of CommandARTICLE, CommandBODY, CommandHEAD, CommandSTAT:
-    return cx.processArticle(cmd, db)
+    return cx.processArticle(cmd, db.conn)
   of CommandLAST:
-    return cx.processLast(cmd, db)
+    return cx.processLast(cmd, db.conn)
   of CommandNEXT:
-    return cx.processNext(cmd, db)
+    return cx.processNext(cmd, db.conn)
   of CommandIHAVE:
-    return cx.processIHave(cmd, data, db)
+    return cx.processIHave(cmd, data, db.conn)
   of CommandPOST:
-    return cx.processPost(cmd, data, db)
+    return cx.processPost(cmd, data, db.conn)
   of CommandSLAVE:
     return Response(code: "202", text: "slave status noted")
