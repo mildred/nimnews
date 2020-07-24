@@ -16,4 +16,5 @@ requires "nim >= 1.2.0"
 requires "docopt"
 requires "nuuid"
 requires "scram"
+requires "passgen"
 

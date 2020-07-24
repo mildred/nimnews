@@ -4,12 +4,18 @@ Nimnews is a simple newsgroup NNTP server
 Usage: nimnews [options]
 
 Options:
-  -h, --help          Print help
-  -p, --port <port>   Specify a different port [default: 119]
-  -d, --db <file>     Database file [default: ./nimnews.sqlite]
-  -f, --fqdn <fqdn>   Fully qualified domain name
-  -s, --secure        Indicates that the connection is already encrypted
-  --log               Log traffic
+  -h, --help            Print help
+  -p, --port <port>     Specify a different port [default: 119]
+  -d, --db <file>       Database file [default: ./nimnews.sqlite]
+  -f, --fqdn <fqdn>     Fully qualified domain name
+  -s, --secure          Indicates that the connection is already encrypted
+  --log                 Log traffic
+  --smtp <server>       Address of SMTP server to send e-mails
+  --smtp-port <port>    Port to connect to the SMTP server [default: 25]
+  --smtp-login <login>  Login for SMTP server
+  --smtp-pass <pass>    Password for SMTP server
+  --smtp-sender <email> Email address to send e-mails as
+  --smtp-debug          Debug SMTP
 """ & (when not defined(ssl): "" else: """
   --cert <pemfile>    PEM certificate for STARTTLS
   --skey <pemfile>    PEM secret key for STARTTLS
@@ -21,6 +27,7 @@ import ./nntp
 import ./parse_nntp
 import ./process_nntp
 import ./database
+import ./email
 
 let args = docopt(doc)
 let
@@ -29,6 +36,13 @@ let
   arg_fqdn   = $args["--fqdn"]
   arg_secure = args["--secure"]
   arg_log    = args["--log"]
+  arg_smtp   = SmtpConfig(
+    server: $args["--smtp"],
+    port:   parse_int($args["--smtp-port"]),
+    user:   $args["--smtp-login"],
+    pass:   $args["--smtp-pass"],
+    sender: $args["--smtp-sender"],
+    debug:  args["--smtp-debug"])
 
 when defined(ssl):
   let arg_crypto =
@@ -51,15 +65,15 @@ proc processClient(client0: AsyncSocket) {.async.} =
   var db: Db = connect(arg_db, arg_fqdn)
   defer: db.close()
   var client = client0
-  db.create_views()
-  db.add_anonymous_readme()
+  db.create_views(user_id = anonymous_id)
 
   await client.send(&"{welcome}{CRLF}")
   if arg_log: echo &"> {welcome}"
   let cx: CxState = create(
     fqdn = arg_fqdn,
     secure = arg_secure,
-    starttls = when defined(ssl): arg_crypto != nil else: false)
+    starttls = when defined(ssl): arg_crypto != nil else: false,
+    smtp = arg_smtp)
   while true:
     let line = await client.recvLine()
     if arg_log: echo &"< {line}"
@@ -111,7 +125,12 @@ proc serve() {.async.} =
   while true:
     let client = await server.accept()
     clients.add client
-    asyncCheck processClient(client)
+    try:
+      asyncCheck processClient(client)
+    except:
+      let e = getCurrentException()
+      echo &"{e.name}: {e.msg}"
+      echo getStackTrace(e)
 
 asyncCheck serve()
 runForever()

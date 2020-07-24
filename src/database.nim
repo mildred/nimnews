@@ -22,182 +22,148 @@ let default_acl_id* = 1
 
 let dbTimeFormat* = initTimeFormat("yyyy-MM-dd HH:mm:ss")
 
-proc migrate*(db: DbConn): bool =
-  var user_version = parseInt(db.get_value(sql"PRAGMA user_version;"))
-  if user_version == 0:
-    echo "Initialise database..."
-  var migrating = true
-  while migrating:
-    var description: string
-    let old_version = user_version
-    case user_version
-    of 0:
-      description = "database initialized"
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS articles (
-          id          INTEGER PRIMARY KEY NOT NULL,
-          message_id  TEXT NOT NULL,
-          headers     BLOB NOT NULL,
-          body        BLOB NOT NULL,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      """)
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS groups (
-          name        TEXT PRIMARY KEY NOT NULL,
-          description TEXT,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      """)
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS group_articles (
-          article_id  INTEGER NOT NULL,
-          group_name  TEXT NOT NULL,
-          number      INTEGER NOT NULL,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(article_id) REFERENCES articles(id),
-          FOREIGN KEY(group_name) REFERENCES groups(name)
-        )
-      """)
-      user_version = 1
-    of 1:
-      db.exec(sql"""
-        ALTER TABLE articles RENAME TO t_articles
-      """)
-      db.exec(sql"""
-        ALTER TABLE groups RENAME TO t_groups
-      """)
-      db.exec(sql"""
-        ALTER TABLE group_articles RENAME TO t_group_articles
-      """)
-      user_version = 2
-    of 2:
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS t_users (
-          id          INTEGER PRIMARY KEY NOT NULL,
-          email       TEXT UNIQUE,
-          password    TEXT,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      """)
-      db.exec(sql"""
-        INSERT INTO t_users (id, email) VALUES (?, NULL)
-      """, anonymous_id)
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS t_acls (
-          id          INTEGER PRIMARY KEY NOT NULL,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      """)
-      db.exec(sql"""
-        INSERT INTO t_acls (id) VALUES (?)
-      """, default_acl_id)
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS t_group_perms (
-          group_name  TEXT NOT NULL,
-          acl_id      INTEGER NOT NULL,
-          allow       BOOLEAN NOT NULL,
-          FOREIGN KEY(group_name) REFERENCES t_groups(name),
-          FOREIGN KEY(acl_id) REFERENCES t_acls(id)
-        )
-      """)
-      db.exec(sql"""
-        INSERT INTO t_group_perms (group_name, acl_id, allow)
-        SELECT t_groups.name, ?, TRUE
-        FROM   t_groups
-      """, default_acl_id)
-      db.exec(sql"""
-        CREATE TABLE IF NOT EXISTS t_user_acls (
-          acl_id      INTEGER NOT NULL,
-          user_id     INTEGER NOT NULL,
-          FOREIGN KEY(acl_id) REFERENCES t_acls(id),
-          FOREIGN KEY(user_id) REFERENCES t_users(id)
-        )
-      """)
-      db.exec(sql"""
-        INSERT INTO t_user_acls (acl_id, user_id) VALUES (?, ?)
-      """, default_acl_id, anonymous_id)
-      user_version = 3
-      description  = "added user accounts"
-    else:
-      migrating = false
-    if migrating:
-      if old_version == user_version:
-        return false
-      db.exec(sql"PRAGMA user_version = ?;", user_version)
-      if description == "":
-        echo &"Migrated database v{old_version} to v{user_version}"
-      else:
-        echo &"Migrated database v{old_version} to v{user_version}: {description}"
-  echo "Finished database initialization"
-  return true
+include ./database_migrations
 
-proc create_views*(db: Db) =
+proc add_anonymous_readme(db: Db) =
+  let baseidx = -anonymous_id * 100 # -(getTime().toUnix() %% 100000)
+  let idx1 = baseidx
+  let dt = now()
+
+  db.conn.exec(sql"DELETE FROM virt_articles")
+  db.conn.exec(sql"""
+  INSERT INTO virt_articles(id, message_id, headers, body, created_at)
+  VALUES (?, ?, ?, ?, DATETIME())
+  """,
+    idx1,
+    &"<virtual-info{idx1}@{db.fqdn}>", serialize_headers({
+      "Subject": "Log-in procedure",
+      "Date":    serialize_date(dt)
+    }.to_ordered_table),
+    "To log-in, you need a working e-mail address. Configure your newsgroup" & CRLF &
+    "client with:" & CrLF & CRLF &
+    "username: your e-mail address" & CRLF &
+    "password: your e-mail address" & CRLF & CRLF &
+    "Then an e-mail will be sent to you with your password. Reconfigure your" & CRLF &
+    "Newsgroups client with this password and you are set." & CRLF & CRLF &
+    "If you lost your password, you can repeat this procedure." & CRLF
+    )
+  add_info_group(db)
+
+proc add_user_readme(db: Db, user_id: int) =
+  let baseidx = -user_id * 100 #-(getTime().toUnix() %% 100000)
+  let idx1 = baseidx
+  let email = db.conn.getValue(sql"SELECT email FROM users WHERE id = ?", user_id)
+  let dt = now()
+
+  db.conn.exec(sql"DELETE FROM virt_groups")
+  db.conn.exec(sql"""
+  INSERT INTO virt_groups(name, description, created_at)
+  VALUES (?, ?, DATETIME())
+  """, "info", "Server information, read me first")
+
+  db.conn.exec(sql"DELETE FROM virt_articles")
+  db.conn.exec(sql"""
+  INSERT INTO virt_articles(id, message_id, headers, body, created_at)
+  VALUES (?, ?, ?, ?, DATETIME())
+  """,
+    idx1,
+    &"<virtual-info{idx1}@{db.fqdn}>", serialize_headers({
+      "Subject": &"Successfully logged-in as {email}",
+      "Date":    serialize_date(dt)
+    }.to_ordered_table),
+    &"You are successfully logged-in as {email}"
+    )
+  add_info_group(db)
+
+proc create_views*(db: Db, user_id: int) =
+
+  # Create virtual tables for groups and articles
+
+  db.conn.exec(sql"""
+  CREATE TEMPORARY TABLE IF NOT EXISTS virt_groups (
+    name        TEXT PRIMARY KEY NOT NULL,
+    description TEXT,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+  """)
+  db.conn.exec(sql"""
+  CREATE TEMPORARY TABLE IF NOT EXISTS virt_articles (
+    id          INTEGER UNIQUE NOT NULL,
+    message_id  TEXT NOT NULL,
+    headers     BLOB NOT NULL,
+    body        BLOB NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+  """)
+  db.conn.exec(sql"""
+  CREATE TEMPORARY TABLE IF NOT EXISTS virt_group_articles (
+    article_id  INTEGER NOT NULL,
+    group_name  TEXT NOT NULL,
+    number      INTEGER NOT NULL,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(article_id) REFERENCES virt_articles(id),
+    FOREIGN KEY(group_name) REFERENCES virt_groups(name)
+  )
+  """)
+
+  # Filter user, acl and permissions by current user
+
+  db.conn.exec(sql"DROP VIEW IF EXISTS current_user")
   db.conn.exec(sql"""
   CREATE TEMPORARY VIEW current_user AS
   SELECT  *
-  FROM    t_users
-  WHERE   t_users.email IS NULL
-  """)
+  FROM    users
+  WHERE   users.id = ?
+  """, user_id)
+
+  db.conn.exec(sql"DROP VIEW IF EXISTS current_acls")
   db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW acls AS
-  SELECT  t_acls.*
-  FROM    t_acls
-          JOIN t_user_acls  ON t_acls.id = t_user_acls.acl_id
-          JOIN current_user ON current_user.id = t_user_acls.user_id
-  """)
-  db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW group_perms AS
-  SELECT  t_group_perms.*
-  FROM    t_group_perms
-          JOIN acls ON acls.id = t_group_perms.acl_id
-  """)
-  db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW groups AS
-  SELECT  t_groups.*
-  FROM    t_groups
-          JOIN group_perms ON group_perms.group_name = t_groups.name
-  """)
-  db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW articles AS SELECT * FROM t_articles
-  """)
-  db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW group_articles AS SELECT * FROM t_group_articles
+  CREATE TEMPORARY VIEW current_acls AS
+  SELECT  acls.*
+  FROM    acls
+          JOIN user_acls    ON acls.id = user_acls.acl_id
+          JOIN current_user ON current_user.id = user_acls.user_id
   """)
 
-proc add_anonymous_readme*(db: Db) =
-  let dt = now()
+  db.conn.exec(sql"DROP VIEW IF EXISTS current_group_perms")
   db.conn.exec(sql"""
-  DROP VIEW articles
+  CREATE TEMPORARY VIEW current_group_perms AS
+  SELECT  group_perms.*
+  FROM    group_perms
+          JOIN current_acls ON current_acls.id = group_perms.acl_id
   """)
+
+  # Create views for groups and articles that include virtual groups and articles
+
   db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW articles(id, message_id, headers, body, created_at) AS
-  SELECT * FROM t_articles
-  UNION ALL SELECT CAST(? AS INT), ?, ?, ?, DATETIME()
-  """,
-    -1,
-    &"<virtual-1@{db.fqdn}>", serialize_headers({
-      "Subject": "Log-in details",
-      "Date":    serialize_date(dt)
-    }.to_ordered_table),
-    "To log-in, provide your e-mail as username. An e-mail will be sent to you" & CRLF &
-    "with your password."
-    )
-  db.conn.exec(sql"""
-  DROP VIEW groups
+  CREATE TEMPORARY VIEW IF NOT EXISTS groups AS
+  SELECT  name, description, created_at
+  FROM    real_groups
+          JOIN current_group_perms ON current_group_perms.group_name = real_groups.name
+  UNION ALL
+  SELECT  name, description, created_at
+  FROM    virt_groups
   """)
+
   db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW groups(name, description, created_at) AS
-  SELECT  t_groups.*
-  FROM    t_groups
-          JOIN group_perms ON group_perms.group_name = t_groups.name
-  UNION ALL SELECT ?, ?, DATETIME()
-  """, "info", "Server information, read me first")
-  db.conn.exec(sql"""
-  DROP VIEW group_articles
+  CREATE TEMPORARY VIEW IF NOT EXISTS articles AS
+  SELECT  id, message_id, headers, body, created_at
+  FROM    real_articles
+  UNION ALL
+  SELECT  id, message_id, headers, body, created_at
+  FROM    virt_articles
   """)
+
   db.conn.exec(sql"""
-  CREATE TEMPORARY VIEW group_articles(article_id, group_name, number, created_at) AS
-  SELECT * FROM t_group_articles
-  UNION ALL SELECT CAST(? AS INT), ?, CAST(? AS INT), DATETIME()
-  """, -1, "info", 1)
+  CREATE TEMPORARY VIEW IF NOT EXISTS group_articles AS
+  SELECT  article_id, group_name, number, created_at
+  FROM    real_group_articles
+  UNION ALL
+  SELECT  article_id, group_name, number, created_at
+  FROM    virt_group_articles
+  """)
+
+  if user_id == anonymous_id:
+    add_anonymous_readme(db)
+  else:
+    add_user_readme(db, user_id)

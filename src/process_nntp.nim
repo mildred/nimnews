@@ -5,6 +5,7 @@ import ./database
 import ./auth
 import ./wildmat
 import ./database
+import ./email
 
 type
   Mode = enum
@@ -12,6 +13,7 @@ type
     ModeReader
 
   CxState* = ref object
+    smtp:            SmtpConfig
     fqdn:            string
     cur_article_num: Option[int]
     cur_group_name:  Option[string]
@@ -22,8 +24,8 @@ type
     auth_sasl:       AuthSasl
     can_starttls:    bool
 
-proc create*(fqdn: string, secure: bool, starttls: bool): CxState =
-  return CxState(fqdn: fqdn, mode: ModeInitial, secure: secure, can_starttls: starttls)
+proc create*(fqdn: string, secure: bool, starttls: bool, smtp: SmtpConfig): CxState =
+  return CxState(fqdn: fqdn, mode: ModeInitial, secure: secure, can_starttls: starttls, smtp: smtp)
 
 proc processHelp(cx: CxState, cmd: Command, db: DbConn): Response =
   return Response(code: "100", text: "help text follows", content: some("""
@@ -73,7 +75,7 @@ proc processStartTLS(cx: CxState, cmd: Command, db: DbConn): Response =
   else:
     return Response(code: "500", text: "command not recognized")
 
-proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: DbConn): Response =
+proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   var args = cmd.args.splitWhitespace(1)
   if len(args) < 2:
     return Response(code: "500", text: "command not recognized")
@@ -93,27 +95,30 @@ proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
     elif cx.auth_user == "":
       return Response(code: "482", text: "authentication commands issued out of sequence")
     else:
-      if check_login_pass(cx.auth_user, args[1]):
+      if check_login_pass(db, cx.smtp, cx.auth_user, args[1]):
         cx.auth = true
         return Response(code: "281", text: "authentication succeeded")
       else:
         cx.auth = false
+        cx.auth_user = ""
         return Response(code: "481", text: "authentication failed")
   of "SASL":
     args = cmd.args.splitWhitespace(2)
     if len(args) < 2:
       return Response(code: "500", text: "command not recognized")
     if cx.auth_sasl == nil:
-      cx.auth_sasl = sasl_auth(args[1])
+      cx.auth_sasl = sasl_auth(db, cx.smtp, args[1])
     if cx.auth_sasl == nil:
       return Response(code: "482", text: "authentication protocol error")
     let response = cx.auth_sasl(if data.isSome: data.get else: args[2])
     case response.state
     of AuthAccepted:
       cx.auth = true
+      cx.auth_user = response.username
       return Response(code: "281", text: "authentication succeeded")
     of AuthAcceptedWithData:
       cx.auth = true
+      cx.auth_user = response.username
       return Response(code: "283", text: response.response)
     of AuthFailure, AuthFailureWithData:
       cx.auth = false
@@ -142,6 +147,8 @@ proc getGroupList(rows: seq[Row]): string =
       count = "0"
       first = "1"
       last = "0"
+    # TODO: ensure that the user has right to post before telling 'y' posting is
+    # allowed
     list = list & &"{row[0]} {last} {first} y{CRLF}"
   return list
 
@@ -438,19 +445,19 @@ proc processNext(cx: CxState, cmd: Command, db: DbConn): Response =
 
 proc insertArticle(article: Article, db: DbConn) =
     let article_id = db.insertID(sql"""
-      INSERT INTO t_articles (message_id, headers, body) VALUES (?, ?, ?)
+      INSERT INTO real_articles (message_id, headers, body) VALUES (?, ?, ?)
     """, article.message_id, article.head, article.body)
     for group_name in article.newsgroups:
       db.exec(sql"""
-        INSERT INTO t_groups (name)
+        INSERT INTO real_groups (name)
         SELECT ?
         WHERE NOT EXISTS (SELECT * FROM groups WHERE name = ? COLLATE NOCASE)
       """, group_name, group_name)
       db.exec(sql"""
-        INSERT INTO t_group_perms (group_name, acl_id, allow) VALUES (?, ?, TRUE)
+        INSERT INTO group_perms (group_name, acl_id, allow) VALUES (?, ?, TRUE)
       """, group_name, default_acl_id)
       db.exec(sql"""
-        INSERT INTO t_group_articles (article_id, group_name, number)
+        INSERT INTO real_group_articles (article_id, group_name, number)
         SELECT    ?, groups.name, COALESCE(MAX(group_articles.number)+1, 1)
         FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
         WHERE     groups.name = ? COLLATE NOCASE
@@ -474,6 +481,8 @@ proc processIHave(cx: CxState, cmd: Command, data: Option[string], db: DbConn): 
 
   else:
     let article = parse_article(data.get)
+    if cx.auth:
+      article.head = &"X-NimNews-Provided-By: {cx.auth_user}{CRLF}" & article.head
     if article.message_id != msg_id:
       return Response(code: "436", text: "transfer failed - try again later")
 
@@ -485,6 +494,7 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
     return Response(code: "340", text: "send article to be posted. End with <CR-LF>.<CR-LF>", expect_body: true)
 
   else:
+    # TODO: ensure the sender is the user logged-in
     let article = parse_article(data.get)
     if article.message_id == "":
       article.message_id = gen_message_id(cx.fqdn)
@@ -513,7 +523,7 @@ proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response
   of CommandSTARTTLS:
     return cx.processStartTLS(cmd, db.conn)
   of CommandAUTHINFO:
-    return cx.processAuth(cmd, data, db.conn)
+    return cx.processAuth(cmd, data, db)
   of CommandMODE:
     return cx.processMode(cmd, db.conn)
   of CommandHELP:

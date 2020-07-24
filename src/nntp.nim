@@ -136,4 +136,3 @@ proc serialize_date*(dt: DateTime): string =
   let date = dt.format(messageDateFormat)
   result = date[0..^4] & date[^2..^1]
 
-echo serialize_date(now())
