@@ -4,7 +4,8 @@ import db_sqlite
 import times
 import tables
 
-import ./nntp
+import ./nntp/protocol
+import ./news/messages
 
 type
   Db* = ref object
@@ -23,6 +24,7 @@ let default_acl_id* = 1
 let dbTimeFormat* = initTimeFormat("yyyy-MM-dd HH:mm:ss")
 
 include ./database_migrations
+include ./database_crud
 
 proc add_anonymous_readme(db: Db) =
   let baseidx = -anonymous_id * 100 # -(getTime().toUnix() %% 100000)

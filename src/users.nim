@@ -1,27 +1,9 @@
-import strutils, db_sqlite, strformat
-import passgen
+import strutils, db_sqlite
 import ./database
 import ./email
 
-proc get_pass*(db: Db, login: string): string =
-  var pass = db.conn.getValue(sql"""
-  SELECT password FROM users WHERE email = ?
-  """, login)
-  if pass == "":
-    pass = newPassGen(passlen = 24).getPassword()
-    db.conn.exec(sql"""
-    INSERT OR IGNORE INTO users(email, password) VALUES(?, ?)
-    """, login, pass)
-    db.conn.exec(sql"""
-    INSERT OR IGNORE INTO user_acls(acl_id, user_id)
-    SELECT ?, users.id
-    FROM users
-    WHERE users.email = ?
-    """, default_acl_id, login)
-    pass = db.conn.getValue(sql"""
-    SELECT password FROM users WHERE email = ?
-    """, login)
-  return pass
+proc get_pass*(db: Db, email: string): string =
+  return db.get_user_pass(email)
 
 proc handle_success*(db: Db, smtp: SmtpConfig, login: string) =
   let user_id = parse_int(db.conn.getValue(sql"""

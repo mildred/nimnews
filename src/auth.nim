@@ -1,4 +1,4 @@
-import base64, strutils
+import base64, strutils, options
 import scram/server, nimSHA2
 import ./database
 import ./email
@@ -33,15 +33,20 @@ type
   AuthSasl* = proc(challenge: string): AuthResponse
 
 proc check_login_pass*(db: Db, smtp: SmtpConfig, login, passwd: string): bool =
-  result = users.get_pass(db, login) == passwd
+  let db_pass = users.get_pass(db, login)
+  result = db_pass != "" and db_pass == passwd
   if not result:
     users.send_password(db, smtp, login)
     users.handle_failure(db, smtp, login)
   else:
     users.handle_success(db, smtp, login)
 
-proc get_scram_pass(db: Db, login: string): UserData =
-  return initUserData(get_pass(db, login))
+proc get_scram_pass(db: Db, login: string): Option[UserData] =
+  let db_pass = get_pass(db, login)
+  if db_pass == "":
+    return none(UserData)
+  else:
+    return some initUserData(db_pass)
 
 proc auth*(auth: AuthSaslPlain, challenge: string): AuthResponse =
   let info = base64.decode(challenge).split('\0', 2)
@@ -67,8 +72,12 @@ proc auth*(auth: AuthSaslScram, challenge: string): AuthResponse =
   let info = base64.decode(challenge)
   if auth.username == "":
     auth.username = auth.handleClientFirstMessage(info)
-    let res = auth.prepareFirstMessage(get_scram_pass(auth.db, auth.username))
-    return AuthResponse(state: AuthContinue, response: base64.encode(res), username: auth.username)
+    let pass = get_scram_pass(auth.db, auth.username)
+    if pass.is_none:
+      return AuthResponse(state: AuthError, username: auth.username)
+    else:
+      let res = auth.prepareFirstMessage(pass.get)
+      return AuthResponse(state: AuthContinue, response: base64.encode(res), username: auth.username)
   else:
     let res = auth.prepareFinalMessage(challenge)
     if not auth.isEnded:

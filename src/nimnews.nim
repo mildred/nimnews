@@ -9,6 +9,7 @@ Options:
   -d, --db <file>       Database file [default: ./nimnews.sqlite]
   -f, --fqdn <fqdn>     Fully qualified domain name
   -s, --secure          Indicates that the connection is already encrypted
+  --admin               Indicates that every anonymous user is admin
   --log                 Log traffic
   --smtp <server>       Address of SMTP server to send e-mails
   --smtp-port <port>    Port to connect to the SMTP server [default: 25]
@@ -23,8 +24,7 @@ Options:
 
 import asyncnet, asyncdispatch, net
 import strutils, docopt, strformat, options
-import ./nntp
-import ./parse_nntp
+import ./nntp/protocol
 import ./process_nntp
 import ./database
 import ./email
@@ -36,6 +36,7 @@ let
   arg_fqdn   = $args["--fqdn"]
   arg_secure = args["--secure"]
   arg_log    = args["--log"]
+  arg_admin  = args["--admin"]
   arg_smtp   = SmtpConfig(
     server: $args["--smtp"],
     port:   parse_int($args["--smtp-port"]),
@@ -67,55 +68,86 @@ proc processClient(client0: AsyncSocket) {.async.} =
   var client = client0
   db.create_views(user_id = anonymous_id)
 
-  await client.send(&"{welcome}{CRLF}")
-  if arg_log: echo &"> {welcome}"
   let cx: CxState = create(
     fqdn = arg_fqdn,
     secure = arg_secure,
     starttls = when defined(ssl): arg_crypto != nil else: false,
-    smtp = arg_smtp)
-  while true:
-    let line = await client.recvLine()
-    if arg_log: echo &"< {line}"
-    let command = parse_nntp(line)
-    var response = cx.process(command, none(string), db)
-    await response.send(client, log=arg_log)
-    while response.expect_body or response.expect_line:
-      var data = ""
-      while true:
-        var dataline = await client.recvLine()
-        if arg_log: echo &"< {dataline}"
-        if response.expect_line:
-          data = dataline
-          break
-        if dataline == "." or dataline == "":
-          break
-        elif dataline == CRLF:
-          data = data & dataline
-        elif dataline[0] == '.':
-          data = data & dataline[1..^1] & CRLF
-        else:
-          data = data & dataline & CRLF
-      response = cx.process(command, some data, db)
-      await response.send(client, log = arg_log)
-    if response.quit:
-      break
-    when defined(ssl):
-      if response.starttls:
-        wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
+    smtp = arg_smtp,
+    admin = arg_admin)
 
-proc ensure_db_migrated(): bool =
+  proc read(): Future[Option[string]] {.async.} =
+    var line = await client.recvLine()
+    if line == "": return none string
+    stripLineEnd(line)
+    result = some line
+    if arg_log: echo &"< {result.get}"
+
+  proc write(line: string) {.async.} =
+    await client.send(line)
+    if arg_log:
+      var l = line
+      stripLineEnd(l)
+      echo &"> {l}"
+
+  proc process(cmd: Command, data: Option[string]): Response =
+    return cx.process(cmd, data, db)
+
+  proc starttls() =
+    wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
+
+  let conn = Connection(
+    read: read,
+    write: write,
+    starttls: starttls,
+    process: process)
+
+  await conn.handle_protocol(welcome)
+
+proc process_db(): bool =
   echo &"Opening database {arg_db}"
   var db: Db = connect(arg_db, arg_fqdn)
   defer: db.close()
   if not migrate(db.conn):
     echo "Invalid database"
-    return false
+    quit(1)
   return true
 
-proc serve() {.async.} =
-  if not ensure_db_migrated(): return
+  # Usage: nimnews (get|delete) user [<email> ...]
+  # Usage: nimnews (create|update) user <email> --pass=<pass>
 
+  #if args["create"] and args["user"]:
+  #  db.create_user($args["<email>"], $args["--pass"])
+  #elif args["get"] and args["user"]:
+  #  let emails = args["<email>"]
+  #  if emails.len == 0:
+  #    for u in db.get_users():
+  #      echo $u
+  #  else:
+  #    for email in emails:
+  #      let u = db.get_user(email)
+  #      if u.is_none:
+  #        echo &"No User {email}"
+  #        if emails.len == 1: quit(1)
+  #      else:
+  #        echo $u.get
+  #elif args["update"] and args["user"]:
+  #  db.update_user($args["<email>"], $args["--pass"])
+  #elif args["delete"] and args["user"]:
+  #  echo "not Implemented"
+  #  quit(1)
+
+  #elif args["create"] and args["group"]:
+  #  db.create_group($args["<name>"], $args["<description>"])
+  #elif args["update"] and args["group"]:
+  #  db.update_group($args["<name>"], $args["<description>"])
+  #elif args["delete"] and args["group"]:
+  #  db.delete_group($args["<name>"])
+
+  #else:
+  #  return true
+  #return false
+
+proc serve() {.async.} =
   clients = @[]
   var server = newAsyncSocket()
   server.setSockOpt(OptReuseAddr, true)
@@ -132,5 +164,6 @@ proc serve() {.async.} =
       echo &"{e.name}: {e.msg}"
       echo getStackTrace(e)
 
-asyncCheck serve()
-runForever()
+if process_db():
+  asyncCheck serve()
+  runForever()

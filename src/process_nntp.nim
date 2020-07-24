@@ -1,9 +1,10 @@
 import db_sqlite
 import options, strutils, strformat, times
-import ./nntp
+import ./nntp/protocol
+import ./nntp/wildmat
+import ./news/messages
 import ./database
 import ./auth
-import ./wildmat
 import ./database
 import ./email
 
@@ -23,9 +24,10 @@ type
     auth_user:       string
     auth_sasl:       AuthSasl
     can_starttls:    bool
+    admin:           bool
 
-proc create*(fqdn: string, secure: bool, starttls: bool, smtp: SmtpConfig): CxState =
-  return CxState(fqdn: fqdn, mode: ModeInitial, secure: secure, can_starttls: starttls, smtp: smtp)
+proc create*(fqdn: string, secure: bool, starttls: bool, smtp: SmtpConfig, admin: bool): CxState =
+  return CxState(fqdn: fqdn, mode: ModeInitial, secure: secure, can_starttls: starttls, smtp: smtp, admin: admin)
 
 proc processHelp(cx: CxState, cmd: Command, db: DbConn): Response =
   return Response(code: "100", text: "help text follows", content: some("""
@@ -55,7 +57,8 @@ proc processCapabilities(cx: CxState, cmd: Command, db: DbConn): Response =
     "VERSION 2",
     "READER",
     "IHAVE",
-    "POST"
+    "POST",
+    "X-NIMNEWS"
   ]
   if cx.can_starttls:
     capabilities.add("STARTTLS")
@@ -511,6 +514,22 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
     insertArticle(article, db)
     return Response(code: "240", text: "article posted ok")
 
+proc processListUsers(cx: CxState, cmd: Command, db: DbConn): Response =
+  if not cx.admin:
+    return Response(code: "500", text: "command not recognized")
+
+  let rows = db.getAllRows(sql"""
+    SELECT    users.email, users.created_at
+    FROM      users
+    WHERE     users.email IS NOT NULL
+  """)
+
+  var list = ""
+  for row in rows:
+    list = list & &"{row[0]} {row[1]}{CRLF}"
+
+  return Response(code: "200", text: "list of users follows", content: some(list))
+
 proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command
   of CommandNone:
@@ -550,5 +569,7 @@ proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response
     return cx.processIHave(cmd, data, db.conn)
   of CommandPOST:
     return cx.processPost(cmd, data, db.conn)
+  of CommandLIST_USERS:
+    return cx.processListUsers(cmd, db.conn)
   of CommandSLAVE:
     return Response(code: "202", text: "slave status noted")
