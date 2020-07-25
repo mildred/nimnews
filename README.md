@@ -9,7 +9,8 @@ flexible if you need it to be. It is not designed to peer with Usenet although
 it could be considered for a future improvement. No policy is implemented and
 all commands are accepted even to logged-out users
 
-Implementation status:
+Implementation status and RFCs
+------------------------------
 
 - [RFC-977] should be implemented in full except distributions in NEWNEWS and
   NEWGROUPS
@@ -25,7 +26,8 @@ Implementation status:
 - [RFC-2919] and [RFC-2369]: List-Id and other List headers on feed email list
 - [RFC-2033] (LMTP), [RFC-821], [RFC-1869] (SMTP and ESMTP)
 
-Goals:
+Goals
+-----
 
 - Newsgroup server which can serve as a backend to Web UI as well as public
   server for classic clients
@@ -36,7 +38,8 @@ Goals:
 - Handles authentication so only verified accounts and verified e-mail address
   can POST messages, ensuring that there is no abuse
 
-Architecture:
+Architecture
+------------
 
 NimNews works with a SMTP server to handle:
 
@@ -65,7 +68,8 @@ Connection is performed using standard LMTP.
            v
         [SQLite]
 
-TODO:
+TODO
+----
 
 - [ ] Handle List-Id and list-specific headers when sending in LIST mode. Handle
   incoming e-mail coming to the subscribe and unsubscribe addresses.
