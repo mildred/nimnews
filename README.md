@@ -93,6 +93,8 @@ TODO
 - [ ] Add `console` command to CLI where NNTP prompt is provided in admin mode.
   useful to manage subscriptions and accounts.
 
+- [ ] Include the SMTP server, probably as a process spawned from NimNews.
+
 Build
 -----
 
