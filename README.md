@@ -27,38 +27,67 @@ Implementation status:
 
 Goals:
 
-- I'm writing this in hope to link it with mailman so mailing lists can be
-  mirrored to newsgroups.
+- Newsgroup server which can serve as a backend to Web UI as well as public
+  server for classic clients
 
-- Federated Newsgroup server with open feed subscription via e-mail
+- Open federation with other servers using SMTP as transfer protocol between
+  instances using e-mail subscriptions
+
+- Handles authentication so only verified accounts and verified e-mail address
+  can POST messages, ensuring that there is no abuse
+
+Architecture:
+
+NimNews works with a SMTP server to handle:
+
+- outgoing e-mail feed subscriptions
+- outgoing e-mail password notification (to mail password to users)
+- incoming e-mail feed (to post to group `alt.xyz` from e-mail
+  `group-alt.xyz@fqdn.example.net`)
+
+Connection is performed using standard LMTP.
+
+         ,---(feed)---------> [Remote nimnews]
+         |
+         |
+         v
+    [SMTP server] <-----> [SMTP] <--------> [Mail User Agent]
+      ^      |
+      |      |
+      |      v
+    ,--+---[LMTP]---.
+    |               |
+    |    nimnews    | <-------------------> [NNTP User Agent]
+    |               |
+    `---------------'
+           ^
+           |
+           v
+        [SQLite]
 
 TODO:
 
-- handle List-Id and list-specific headers when sending in LIST mode
-
-    - Sender and Reply-To is set to group-group.name@fqdn.example.net
-    - if the message does not originates from NNTP (To:/Cc: field present) the
-      From (or Reply-To) header should be added to the outgoing Reply-To header
-    - if the From e-mail has DMARC, rename From by Originated-From and put the
-      Sender value in the From header
-    - Add List-Id, and other list related headers
-
-- handle user permission, only allow posting if the From header matches the user
-  name
-
-- handle authentication when feeding messages (the sending server should tell
-  the receiving one that the newsgroup came from itself and not some random
-  party, could be via specific DKIM)
-
-- handle incoming e-mail for federation (add optional LMTP server)
-
-- handle automatic subscribption to server feeds
-
-- handle incoming e-mail requests for LIST mode subscription:
+- [ ] Handle List-Id and list-specific headers when sending in LIST mode. Handle
+  incoming e-mail coming to the subscribe and unsubscribe addresses.
 
     - subscribe-group.name@fqdn.example.net: create an e-mail feed after a
       successful challenge
     - unsubscribe-group.name@fqdn.example.net: stop the e-mail subscription
+
+- [ ] Do not mangle Form header if DMARC is not enabled on the author domain
+
+- [ ] Handle user permission, only allow posting if the From header matches the user
+  name
+
+- [ ] Handle authentication when feeding messages (the sending server should tell
+  the receiving one that the newsgroup came from itself and not some random
+  party, could be via specific DKIM)
+
+- [ ] Handle NimNews issuing `FEED EMAIL` commands to servers it wants to receive
+  feeds from (currently, the newsmaster has to do this manually)
+
+- [ ] Add `console` command to CLI where NNTP prompt is provided in admin mode.
+  useful to manage subscriptions and accounts.
 
 Build
 -----
@@ -66,20 +95,19 @@ Build
     nimble install -d
     nim c -d:ssl src/nimnews
 
-You can omit `-d:ssl` if you don't want to compile with STARTTLS support.
+You can omit `-d:ssl` if you don't want to compile with STARTTLS support (not
+well tested, might break).
 
 Run
 ---
 
 Try it out:
 
-    src/nimnews -p 1119 -f example.org --secure
+    ./gen-cert.sh
+    ./run-exim.sh
+    ./run-nimnews.sh
 
-You need to provide the fully qualified domain name as command-line argument
-(mandatory) and the port number defaults to 119 (you need to be root). You can
-tell nimnews that you have a TLS tunneling and it can safely receive passwords
-in clear using `--secure` or you can configure STARTTLS with `--cert` and
-`--skey` (untested yet). use `--help` for full help message.
+Options are:
 
 ```
 Nimnews is a simple newsgroup NNTP server
@@ -87,13 +115,25 @@ Nimnews is a simple newsgroup NNTP server
 Usage: nimnews [options]
 
 Options:
-  -h, --help          Print help
-  -p, --port <port>   Specify a different port [default: 119]
-  -d, --db <file>     Database file [default: ./nimnews.sqlite]
-  -f, --fqdn <fqdn>   Fully qualified domain name
-  -s, --secure        Indicates that the connection is already encrypted
-  --cert <pemfile>    PEM certificate for STARTTLS
-  --skey <pemfile>    PEM secret key for STARTTLS
+  -h, --help            Print help
+  -p, --port <port>     Specify a different port [default: 119]
+  -d, --db <file>       Database file [default: ./nimnews.sqlite]
+  -f, --fqdn <fqdn>     Fully qualified domain name
+  -s, --secure          Indicates that the connection is already encrypted
+  --admin               Indicates that every anonymous user is admin
+  --log                 Log traffic
+  --smtp <server>       Address of SMTP server to send e-mails
+  --smtp-port <port>    Port to connect to the SMTP server [default: 25]
+  --smtp-login <login>  Login for SMTP server
+  --smtp-pass <pass>    Password for SMTP server
+  --smtp-sender <email> Email address to send e-mails as
+  --smtp-debug          Debug SMTP
+  --lmtp-port <port>    Specify port for LMTP [default: 24]
+  --lmtp-addr <addr>    Specify listen address for LMTP [default: 127.0.0.1]
+  --lmtp-socket <file>  Socket file for LMTP
+  --tls-port <port>     Port number for NNTPS [default: 563]
+  --cert <pemfile>      PEM certificate for STARTTLS
+  --skey <pemfile>      PEM secret key for STARTTLS
 ```
 
 X-NIMNEWS Extension
@@ -127,10 +167,6 @@ be accepted for the given user. If the user is administrator, all addresses are
 accepted. If the user e-mail matches [RFC-2142] `postmaster@*`, `usenet@*`,
 `news@*`, every e-mail within that domain is allowed in the `FEED EMAIL`
 command. Else, only the user e-mail is allowed.
-
-As special case in LIST mode, if the provided e-mail local-part contains `*`
-(example: `news-*@example.net`), the `*` character is replaced by the group name
-(example: `news-alt.misc@example.net`)
 
 Responses:
 
