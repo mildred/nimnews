@@ -2,11 +2,11 @@ import db_sqlite
 import options, strutils, strformat, times
 import ./nntp/protocol
 import ./nntp/wildmat
-import ./news/messages
-import ./database
+import ./news/messages except CRLF
+import ./db
 import ./auth
-import ./database
 import ./email
+import ./process
 
 type
   Mode = enum
@@ -446,32 +446,11 @@ proc processNext(cx: CxState, cmd: Command, db: DbConn): Response =
   else:
     return Response(code: "223", text: "{art[0]} {art[1]} article retrieved - request text separately")
 
-proc insertArticle(article: Article, db: DbConn) =
-    let article_id = db.insertID(sql"""
-      INSERT INTO real_articles (message_id, headers, body) VALUES (?, ?, ?)
-    """, article.message_id, article.head, article.body)
-    for group_name in article.newsgroups:
-      db.exec(sql"""
-        INSERT INTO real_groups (name)
-        SELECT ?
-        WHERE NOT EXISTS (SELECT * FROM groups WHERE name = ? COLLATE NOCASE)
-      """, group_name, group_name)
-      db.exec(sql"""
-        INSERT INTO group_perms (group_name, acl_id, allow) VALUES (?, ?, TRUE)
-      """, group_name, default_acl_id)
-      db.exec(sql"""
-        INSERT INTO real_group_articles (article_id, group_name, number)
-        SELECT    ?, groups.name, COALESCE(MAX(group_articles.number)+1, 1)
-        FROM      groups LEFT OUTER JOIN group_articles ON groups.name == group_articles.group_name
-        WHERE     groups.name = ? COLLATE NOCASE
-        GROUP BY  groups.name
-      """, article_id, group_name)
-
-proc processIHave(cx: CxState, cmd: Command, data: Option[string], db: DbConn): Response =
+proc processIHave(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   let msg_id = cmd.args
 
   if data.isNone:
-    let res = db.getRow(sql"""
+    let res = db.conn.getRow(sql"""
       SELECT  COUNT(*)
       FROM    articles
       WHERE   articles.message_id = ?
@@ -489,10 +468,10 @@ proc processIHave(cx: CxState, cmd: Command, data: Option[string], db: DbConn): 
     if article.message_id != msg_id:
       return Response(code: "436", text: "transfer failed - try again later")
 
-    insertArticle(article, db)
+    article.insertArticle(cx.smtp, db)
     return Response(code: "235", text: "article transferred ok")
 
-proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): Response =
+proc processPost(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   if data.isNone:
     return Response(code: "340", text: "send article to be posted. End with <CR-LF>.<CR-LF>", expect_body: true)
 
@@ -503,7 +482,7 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
       article.message_id = gen_message_id(cx.fqdn)
       article.head = &"Message-Id: {article.message_id}{CRLF}" & article.head
 
-    let res = db.getRow(sql"""
+    let res = db.conn.getRow(sql"""
       SELECT  COUNT(*)
       FROM    articles
       WHERE   articles.message_id = ?
@@ -511,12 +490,12 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: DbConn): R
     if res[0] != "0":
       return Response(code: "441", text: "posting failed")
 
-    insertArticle(article, db)
+    article.insertArticle(cx.smtp, db)
     return Response(code: "240", text: "article posted ok")
 
 proc processListUsers(cx: CxState, cmd: Command, db: DbConn): Response =
   if not cx.admin:
-    return Response(code: "500", text: "command not recognized")
+    return Response(code: "480", text: "Not allowed")
 
   let rows = db.getAllRows(sql"""
     SELECT    users.email, users.created_at
@@ -528,7 +507,83 @@ proc processListUsers(cx: CxState, cmd: Command, db: DbConn): Response =
   for row in rows:
     list = list & &"{row[0]} {row[1]}{CRLF}"
 
-  return Response(code: "200", text: "list of users follows", content: some(list))
+  return Response(code: "295", text: "list of users follows", content: some(list))
+
+proc processListFeeds(cx: CxState, cmd: Command, db: DbConn): Response =
+  let rows = db.getAllRows(sql"""
+    SELECT    feeds.id, 'EMAIL', feeds.email, feeds.wildmat, feeds.site_id
+    FROM      feeds JOIN users ON feeds.user_id = user.id
+    WHERE     users.email = ?
+  """, cx.auth_user)
+
+  var list = ""
+  for row in rows:
+    list = list & &"{row[0]} {row[1]} {row[2]} {row[3]} {row[4]}{CRLF}"
+
+  return Response(code: "295", text: "list of feeds follows", content: some(list))
+
+proc processStopFeed(cx: CxState, cmd: Command, db: DbConn): Response =
+  let feed_num = cmd.args
+  let rows = db.execAffectedRows(sql"""
+    DELETE FROM feeds
+    WERE  feeds.user_id IN (SELECT id FROM users WHERE email = ?) AND
+          feeds.id = ?
+  """, cx.auth_user, feed_num)
+
+  if rows == 0:
+    return Response(code: "490", text: "no such feed")
+  else:
+    return Response(code: "290", text: "feed stopped")
+
+proc processFeedEmail(cx: CxState, cmd: Command, db: DbConn): Response =
+  var args = cmd.args.splitWhitespace()
+  var list = false
+  if args[0].toUpper == "LIST":
+    list = true
+    args = args[1..^0]
+  let email = args[0]
+  var wildmat = args[1]
+  let site_id = args[2]
+
+  if wildmat == "":
+    if cx.cur_group_name.isNone:
+      return Response(code: "412", text: "no newsgroup has been selected")
+    wildmat = cx.cur_group_name.get
+
+  if email == "":
+    return Response(code: "501", text: "syntax error, try FEED EMAIL [LIST] <email> [<wildmat> [<site-id>]]")
+
+  var allowed = cx.admin
+
+  if not allowed and cx.auth_user == email:
+    allowed = true
+
+  if not allowed:
+    let parts = cx.auth_user.split("@")
+    let feed_parts = email.split("@")
+    case parts[0]
+    of "postmaster", "usenet", "news":
+      allowed = (feed_parts.len == 2) and (parts.len == 2) and (feed_parts[1] == parts[1])
+    else:
+      discard
+
+  if not allowed:
+    return Response(code: "480", text: &"e-mail not allowed")
+
+  let num = db.insertID(sql"""
+    INSERT INTO feeds (user_id, email, list, wildmat, site_id)
+    SELECT
+      users.id,
+      ?,
+      ?,
+      ?,
+      CASE ? WHEN "" THEN NULL ELSE ? END
+    FROM users
+    WHERE
+      users.email = ?
+  """, email, list, wildmat, site_id, site_id, cx.auth_user)
+
+  return Response(code: "290", text: &"{num} feed registered")
 
 proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command
@@ -566,10 +621,16 @@ proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response
   of CommandNEXT:
     return cx.processNext(cmd, db.conn)
   of CommandIHAVE:
-    return cx.processIHave(cmd, data, db.conn)
+    return cx.processIHave(cmd, data, db)
   of CommandPOST:
-    return cx.processPost(cmd, data, db.conn)
+    return cx.processPost(cmd, data, db)
   of CommandLIST_USERS:
     return cx.processListUsers(cmd, db.conn)
+  of CommandLIST_FEEDS:
+    return cx.processListFeeds(cmd, db.conn)
+  of CommandSTOP_FEED:
+    return cx.processStopFeed(cmd, db.conn)
+  of CommandFEED_EMAIL:
+    return cx.processFeedEmail(cmd, db.conn)
   of CommandSLAVE:
     return Response(code: "202", text: "slave status noted")

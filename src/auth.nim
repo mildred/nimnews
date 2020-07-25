@@ -1,6 +1,6 @@
 import base64, strutils, options
 import scram/server, nimSHA2
-import ./database
+import ./db
 import ./email
 import ./users
 

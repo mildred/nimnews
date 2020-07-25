@@ -1,20 +1,24 @@
 import strformat, strutils, times, tables
 import nuuid
 
-const CRLF = "\c\L"
+const CRLF* = "\c\L"
 
 type
 
   Article* = ref object
     head*: string
     body*: string
+    path*: string
     message_id*: string
     newsgroups*: seq[string]
+    sender*: string
 
   Header* = ref object
     name*: string
     value*: string
 
+proc `$`*(art: Article): string =
+  result = art.head & CRLF & art.body
 
 proc parse_headers*(head: string): seq[string] =
   result = @[]
@@ -22,7 +26,7 @@ proc parse_headers*(head: string): seq[string] =
   stripLineEnd(head2)
   for line in head2.split(CRLF):
     if len(line) > 0 and line[0] in Whitespace and len(result) > 0:
-      result[len(result)-1].add(line)
+      result[len(result)-1].add(CRLF & line)
     else:
       result.add(line)
 
@@ -39,11 +43,15 @@ proc parse_article*(art: string): Article =
   for header in parse_headers(head):
     let header = parse_header(header)
     case header.name.toLower()
+    of "path":
+      result.path = header.value
     of "message-id":
       result.message_id = header.value
     of "newsgroups":
       for group in header.value.split(","):
         result.newsgroups.add(group.strip())
+    of "sender":
+      result.sender = header.value
 
 const messageIdTimestampFormat: TimeFormat = initTimeFormat("yyyyMMddHHmmssfff")
 

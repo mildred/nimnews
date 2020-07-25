@@ -1,5 +1,6 @@
 import strutils, db_sqlite
-import ./database
+import ./db/users
+import ./db
 import ./email
 
 proc get_pass*(db: Db, email: string): string =

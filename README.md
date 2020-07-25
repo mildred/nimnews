@@ -22,9 +22,42 @@ Implementation status:
 - [RFC-850]: Message structure, control messages, not implemented at all except
   very basic parsing of headers and body following mostly [RFC-822] [RFC-2822]
   and [RFC-5322]
+- [RFC-2919] and [RFC-2369]: List-Id and other List headers on feed email list
 
-Goals: I'm writing this in hope to link it with mailman so mailing lists can be
-mirrored to newsgroups.
+Goals:
+
+- I'm writing this in hope to link it with mailman so mailing lists can be
+  mirrored to newsgroups.
+
+- Federated Newsgroup server with open feed subscription via e-mail
+
+TODO:
+
+- handle List-Id and list-specific headers when sending in LIST mode
+
+    - Sender and Reply-To is set to group-group.name@fqdn.example.net
+    - if the message does not originates from NNTP (To:/Cc: field present) the
+      From (or Reply-To) header should be added to the outgoing Reply-To header
+    - if the From e-mail has DMARC, rename From by Originated-From and put the
+      Sender value in the From header
+    - Add List-Id, and other list related headers
+
+- handle user permission, only allow posting if the From header matches the user
+  name
+
+- handle authentication when feeding messages (the sending server should tell
+  the receiving one that the newsgroup came from itself and not some random
+  party, could be via specific DKIM)
+
+- handle incoming e-mail for federation (add optional LMTP server)
+
+- handle automatic subscribption to server feeds
+
+- handle incoming e-mail requests for LIST mode subscription:
+
+    - subscribe-group.name@fqdn.example.net: create an e-mail feed after a
+      successful challenge
+    - unsubscribe-group.name@fqdn.example.net: stop the e-mail subscription
 
 Build
 -----
@@ -62,10 +95,93 @@ Options:
   --skey <pemfile>    PEM secret key for STARTTLS
 ```
 
+X-NIMNEWS Extension
+===================
+
+Nimnews advertise `X-NIMNEWS` extension with the following commands:
+
+FEED EMAIL
+----------
+
+Syntax: `FEED EMAIL [LIST] <hello@example.net> [WILDMAT [<site-id>]]`
+
+The feed command registers a new feed using e-mail. A feed is a link with
+another system happening over e-mail using the provided e-mail address. If the
+`LIST` keyword is present, then mailing-list style distribution is assumed with
+list headers. mailing-list distribution might mangle the `From` header to pass
+DMARC.
+
+A site-id may be specified, instructing not to feed articles that contains this
+id in the `Path` header.
+
+An optional `WILDMAT` parameter can be specified. The wildmat pattern would
+match groups that need feeding. if not specified, only the current group will be
+fed.
+
+Feeds may be cancelled by the system any time, but should not do so without
+notification, unless there is delivery errors.
+
+To be accepted, the user must be logged-in and the provided e-mail address must
+be accepted for the given user. If the user is administrator, all addresses are
+accepted. If the user e-mail matches [RFC-2142] `postmaster@*`, `usenet@*`,
+`news@*`, every e-mail within that domain is allowed in the `FEED EMAIL`
+command. Else, only the user e-mail is allowed.
+
+As special case in LIST mode, if the provided e-mail local-part contains `*`
+(example: `news-*@example.net`), the `*` character is replaced by the group name
+(example: `news-alt.misc@example.net`)
+
+Responses:
+
+- `290 <num>` Feed registered
+- `412` No selected group if wildmat is not defined and no group is selected
+- `480` Disallowed (user not matching address, not registered or not admin)
+
+LIST FEEDS
+----------
+
+Return a list of feeds registered by the current user. The list is formatted as
+follows:
+
+    <num> EMAIL <email@example.net> <wildmat-or-group> <site-id>
+
+Responses:
+
+- `295` List follows
+- `480` User not registered
+
+STOP FEED
+---------
+
+Syntax: `FEED STOP <num>`
+
+Stop a given feed (removing it)
+
+Responses:
+
+- `290` Feed stopped
+- `490` No such feed
+- `480` User not registered
+
+LIST USERS
+----------
+
+Return a list of users registered on the system. This is intended for
+interactive use and the list format is not defined.
+
+Responses:
+
+- `295` List follows
+- `480` Disallowed unless the user is administrator
+
+
 [RFC-822]: https://tools.ietf.org/html/rfc822
 [RFC-850]: https://tools.ietf.org/html/rfc850
 [RFC-977]: https://tools.ietf.org/html/rfc977
+[RFC-2142]: https://tools.ietf.org/html/rfc2142
+[RFC-2369]: https://tools.ietf.org/html/rfc2369
 [RFC-2822]: https://tools.ietf.org/html/rfc2822
+[RFC-2919]: https://tools.ietf.org/html/rfc2919
 [RFC-2980]: https://tools.ietf.org/html/rfc2980
 [RFC-3977]: https://tools.ietf.org/html/rfc3977
 [RFC-4616]: https://tools.ietf.org/html/rfc4616

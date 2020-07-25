@@ -1,4 +1,5 @@
-import passgen, options
+import passgen, options, strformat, db_sqlite
+import ../db
 
 type
   User* = ref object

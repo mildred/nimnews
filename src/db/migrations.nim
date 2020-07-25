@@ -1,3 +1,10 @@
+import strutils
+import strformat
+import db_sqlite
+import tables
+
+import ../db
+
 proc migrate*(db: DbConn): bool =
   var user_version = parseInt(db.get_value(sql"PRAGMA user_version;"))
   if user_version == 0:
@@ -97,6 +104,21 @@ proc migrate*(db: DbConn): bool =
       """, default_acl_id, anonymous_id)
       user_version = 3
       description  = "added user accounts"
+    of 3:
+      db.exec(sql"""
+        CREATE TABLE IF NOT EXISTS feeds (
+          id          INTEGER PRIMARY KEY NOT NULL,
+          user_id     INTEGER NOT NULL,
+          email       TEXT,
+          list        BOOLEAN DEFAULT FALSE,
+          wildmat     TEXT DEFAULT '*',
+          site_id     TEXT,
+          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+          FOREIGN KEY(user_id) REFERENCES users(id),
+        )
+      """)
+      user_version = 3
+      description  = "added feeds"
     else:
       migrating = false
     if migrating:
@@ -109,19 +131,4 @@ proc migrate*(db: DbConn): bool =
         echo &"Migrated database v{old_version} to v{user_version}: {description}"
   echo "Finished database initialization"
   return true
-
-proc add_info_group(db: Db) =
-  db.conn.exec(sql"DELETE FROM virt_groups")
-  db.conn.exec(sql"""
-  INSERT INTO virt_groups(name, description, created_at)
-  VALUES (?, ?, DATETIME())
-  """, "info", "Server information, read me first")
-
-  db.conn.exec(sql"DELETE FROM virt_group_articles")
-  db.conn.exec(sql"""
-  INSERT INTO virt_group_articles(article_id, group_name, number, created_at)
-  SELECT id, 'info', -id, created_at
-  FROM virt_articles
-  WHERE message_id LIKE '<virtual-info-%>'
-  """)
 

@@ -17,6 +17,8 @@ Options:
   --smtp-pass <pass>    Password for SMTP server
   --smtp-sender <email> Email address to send e-mails as
   --smtp-debug          Debug SMTP
+  --lmtp-port <port>    Specify port for LMTP [default: 2525]
+  --lmtp-addr <addr>    Specify listen address for LMTP [default: 127.0.0.1]
 """ & (when not defined(ssl): "" else: """
   --cert <pemfile>    PEM certificate for STARTTLS
   --skey <pemfile>    PEM secret key for STARTTLS
@@ -24,26 +26,32 @@ Options:
 
 import asyncnet, asyncdispatch, net
 import strutils, docopt, strformat, options
-import ./nntp/protocol
+import ./nntp/protocol as nntp
+import ./smtp/protocol as smtp
+import ./db/migrations
 import ./process_nntp
-import ./database
+import ./process_smtp
+import ./db
 import ./email
 
 let args = docopt(doc)
 let
-  arg_port   = Port(parse_int($args["--port"]))
-  arg_db     = $args["--db"]
-  arg_fqdn   = $args["--fqdn"]
-  arg_secure = args["--secure"]
-  arg_log    = args["--log"]
-  arg_admin  = args["--admin"]
-  arg_smtp   = SmtpConfig(
+  arg_port      = Port(parse_int($args["--port"]))
+  arg_db        = $args["--db"]
+  arg_fqdn      = $args["--fqdn"]
+  arg_secure    = args["--secure"]
+  arg_log       = args["--log"]
+  arg_admin     = args["--admin"]
+  arg_smtp      = SmtpConfig(
     server: $args["--smtp"],
     port:   parse_int($args["--smtp-port"]),
     user:   $args["--smtp-login"],
     pass:   $args["--smtp-pass"],
     sender: $args["--smtp-sender"],
-    debug:  args["--smtp-debug"])
+    debug:  args["--smtp-debug"],
+    fqdn:   arg_fqdn)
+  arg_smtp_port = Port(parse_int($args["--lmtp-port"]))
+  arg_smtp_addr = $args["--lmtp-addr"]
 
 when defined(ssl):
   let arg_crypto =
@@ -68,7 +76,7 @@ proc processClient(client0: AsyncSocket) {.async.} =
   var client = client0
   db.create_views(user_id = anonymous_id)
 
-  let cx: CxState = create(
+  let cx: process_nntp.CxState = create(
     fqdn = arg_fqdn,
     secure = arg_secure,
     starttls = when defined(ssl): arg_crypto != nil else: false,
@@ -80,22 +88,60 @@ proc processClient(client0: AsyncSocket) {.async.} =
     if line == "": return none string
     stripLineEnd(line)
     result = some line
-    if arg_log: echo &"< {result.get}"
+    if arg_log: echo &"NNTP < {result.get}"
 
   proc write(line: string) {.async.} =
     await client.send(line)
     if arg_log:
       var l = line
       stripLineEnd(l)
-      echo &"> {l}"
+      echo &"NNTP > {l}"
 
-  proc process(cmd: Command, data: Option[string]): Response =
+  proc process(cmd: nntp.Command, data: Option[string]): nntp.Response =
     return cx.process(cmd, data, db)
 
   proc starttls() =
     wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
 
-  let conn = Connection(
+  let conn = nntp.Connection(
+    read: read,
+    write: write,
+    starttls: starttls,
+    process: process)
+
+  await conn.handle_protocol(welcome)
+
+proc processSmtpClient(client0: AsyncSocket) {.async.} =
+  var db: Db = connect(arg_db, arg_fqdn)
+  defer: db.close()
+  var client = client0
+  db.create_views(user_id = anonymous_id)
+
+  let cx: process_smtp.CxState = process_smtp.create(
+    fqdn = arg_fqdn,
+    smtp = arg_smtp)
+
+  proc read(): Future[Option[string]] {.async.} =
+    var line = await client.recvLine()
+    if line == "": return none string
+    stripLineEnd(line)
+    result = some line
+    if arg_log: echo &"LMTP < {result.get}"
+
+  proc write(line: string) {.async.} =
+    await client.send(line)
+    if arg_log:
+      var l = line
+      stripLineEnd(l)
+      echo &"LMTP > {l}"
+
+  proc process(cmd: smtp.Command, data: Option[string]): smtp.Response =
+    return cx.process(cmd, data, db)
+
+  proc starttls() =
+    wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
+
+  let conn = smtp.Connection(
     read: read,
     write: write,
     starttls: starttls,
@@ -164,6 +210,24 @@ proc serve() {.async.} =
       echo &"{e.name}: {e.msg}"
       echo getStackTrace(e)
 
+proc serveSmtp() {.async.} =
+  clients = @[]
+  var server = newAsyncSocket()
+  server.setSockOpt(OptReuseAddr, true)
+  server.bindAddr(arg_smtp_port, arg_smtp_addr)
+  server.listen()
+
+  while true:
+    let client = await server.accept()
+    clients.add client
+    try:
+      asyncCheck processSmtpClient(client)
+    except:
+      let e = getCurrentException()
+      echo &"{e.name}: {e.msg}"
+      echo getStackTrace(e)
+
 if process_db():
   asyncCheck serve()
+  asyncCheck serveSmtp()
   runForever()

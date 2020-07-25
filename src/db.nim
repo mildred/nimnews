@@ -5,7 +5,7 @@ import times
 import tables
 
 import ./nntp/protocol
-import ./news/messages
+import ./news/messages except CRLF
 
 type
   Db* = ref object
@@ -23,8 +23,20 @@ let default_acl_id* = 1
 
 let dbTimeFormat* = initTimeFormat("yyyy-MM-dd HH:mm:ss")
 
-include ./database_migrations
-include ./database_crud
+proc add_info_group(db: Db) =
+  db.conn.exec(sql"DELETE FROM virt_groups")
+  db.conn.exec(sql"""
+  INSERT INTO virt_groups(name, description, created_at)
+  VALUES (?, ?, DATETIME())
+  """, "info", "Server information, read me first")
+
+  db.conn.exec(sql"DELETE FROM virt_group_articles")
+  db.conn.exec(sql"""
+  INSERT INTO virt_group_articles(article_id, group_name, number, created_at)
+  SELECT id, 'info', -id, created_at
+  FROM virt_articles
+  WHERE message_id LIKE '<virtual-info-%>'
+  """)
 
 proc add_anonymous_readme(db: Db) =
   let baseidx = -anonymous_id * 100 # -(getTime().toUnix() %% 100000)
