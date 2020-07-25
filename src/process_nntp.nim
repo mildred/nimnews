@@ -540,7 +540,7 @@ proc processFeedEmail(cx: CxState, cmd: Command, db: DbConn): Response =
   var list = false
   if args[0].toUpper == "LIST":
     list = true
-    args = args[1..^0]
+    args = args[1..^1]
   let email = args[0]
   var wildmat = args[1]
   let site_id = args[2]
@@ -590,6 +590,8 @@ proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response
   of CommandNone:
     echo &"Client wanted command {cmd.cmd_name} {cmd.args}"
     return Response(code: "500", text: "command not recognized")
+  of CommandConnected:
+    return Response(code: "200", text: "nimnews server ready")
   of CommandQUIT:
     return Response(code: "205", text: "closing connection - goodbye!", quit: true)
   of CommandCAPABILITIES:

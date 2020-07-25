@@ -51,7 +51,7 @@ proc set_article_list_headers(article: Article, group, fqdn, recipient: string):
 
 proc feed_article_email*(article: Article, article_id: int64, db: Db, smtp: SmtpConfig) =
   let rows = db.conn.getAllRows(sql"""
-  SELECT  feed.email, feeds.list, feed.site_id, feed.wildmat
+  SELECT  feeds.email, feeds.list, feeds.site_id, feeds.wildmat
   FROM    feeds, real_group_articles
   WHERE   NOT feeds.list
   """)

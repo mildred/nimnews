@@ -60,7 +60,7 @@ proc parse_name_address*(a: string): seq[NameAddress] =
       elif gt == -1:
         result.add(NameAddress(
           name: none(string),
-          address: parse_address(a[i..^0].strip)))
+          address: parse_address(a[i..^1].strip)))
         i = a.len
       else:
         result.add(NameAddress(

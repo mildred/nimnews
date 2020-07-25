@@ -94,7 +94,7 @@ proc send*(res: Response, conn: Connection) {.async.} =
       last_line = line
     await conn.write(&"{res.code} {last_line}{CRLF}")
 
-proc handle_protocol*(conn: Connection, welcome: string) {.async.} =
+proc handle_protocol*(conn: Connection) {.async.} =
   let initial_cmd = Command(command: CommandConnect)
   let initial_response = conn.process(initial_cmd, none(string))
   await initial_response.send(conn)

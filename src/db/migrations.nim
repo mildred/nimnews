@@ -113,11 +113,11 @@ proc migrate*(db: DbConn): bool =
           list        BOOLEAN DEFAULT FALSE,
           wildmat     TEXT DEFAULT '*',
           site_id     TEXT,
-          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-          FOREIGN KEY(user_id) REFERENCES users(id),
+          created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(user_id) REFERENCES users(id)
         )
       """)
-      user_version = 3
+      user_version = 4
       description  = "added feeds"
     else:
       migrating = false

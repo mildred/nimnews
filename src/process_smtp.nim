@@ -26,10 +26,10 @@ proc create*(fqdn: string, smtp: SmtpConfig): CxState =
 
 proc parse_addr(arg0: string): Option[Address] =
   let arg = arg0.strip
-  if arg.len < 3 and arg[0] != '<' and arg[^0] != '>':
+  if arg.len < 3 and arg[0] != '<' and arg[^1] != '>':
     return none(Address)
   else:
-    return some parse_address(arg[1..^1])
+    return some parse_address(arg[1..^2])
 
 proc parse_local_part(local_part: string): Option[LocalPart] =
   let parts = local_part.split('-', 1)
@@ -67,7 +67,7 @@ proc processRcptTo(cx: CxState, cmd: Command): Response =
     return Response(code: "501", text: "Syntax error, use RCPT TO:<address@example.net>")
 
   if adr.get.domain.is_some and adr.get.domain.get != cx.fqdn:
-    return Response(code: "550", text: "Domain not relayed")
+    return Response(code: "550", text: &"Domain {adr.get.domain.get} not relayed, only {cx.fqdn} is accepted")
 
   let local_part = adr.get.local_part.parse_local_part
 
@@ -82,7 +82,7 @@ proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
   if cx.mail_from.len == 0 or cx.rcpt_to.len == 0:
     return Response(code: "503", text: "Bad sequence of commands")
   if data.is_none:
-    return Response(code: "354", text: "Start mail input; end with <CRLF>.<CRLF>")
+    return Response(code: "354", text: "Start mail input; end with <CRLF>.<CRLF>", expect_body: true)
 
   let art = parse_article(data.get)
   art.newsgroups = @[]
@@ -94,6 +94,7 @@ proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     let head_news = art.newsgroups.join(", ")
     art.head = &"Newsgroups: {head_news}{CRLF}" & art.head
     art.insertArticle(cx.smtp, db)
+  return Response(code: "250", text: "OK")
 
 proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command

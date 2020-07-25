@@ -5,6 +5,7 @@ const CRLF* = "\c\L"
 type
   CommandKind* = enum
     CommandNone
+    CommandConnected
     CommandARTICLE    = "ARTICLE"
     CommandBODY       = "BODY"
     CommandGROUP      = "GROUP"
@@ -115,8 +116,10 @@ proc send*(res: Response, conn: Connection) {.async.} =
         await conn.write(&"{line}{CRLF}")
     await conn.write(&".{CRLF}")
 
-proc handle_protocol*(conn: Connection, welcome: string) {.async.} =
-  await conn.write(&"{welcome}{CRLF}")
+proc handle_protocol*(conn: Connection) {.async.} =
+  let initial_cmd = Command(command: CommandConnected)
+  let initial_response = conn.process(initial_cmd, none(string))
+  await initial_response.send(conn)
   while true:
     let line = await conn.read()
     if line.is_none:

@@ -12,10 +12,16 @@ type
     fqdn*: string
 
 proc send_email*(cfg: SmtpConfig, sender, recipient: string, msg: string) =
-  let smtpConn = newSmtp(debug=cfg.debug)
+  var smtpConn = newSmtp(debug=cfg.debug)
   let port = Port(if cfg.port == 0: 25 else: cfg.port)
   smtpConn.connect(cfg.server, port)
-  smtpConn.startTls()
+  defer: smtpConn.close()
+  try:
+    smtpConn.startTls()
+  except:
+    smtpConn.close()
+    smtpConn = newSmtp(debug=cfg.debug)
+    smtpConn.connect(cfg.server, port)
   echo $cfg.user
   if cfg.user != "":
     smtpConn.auth(cfg.user, cfg.pass)
