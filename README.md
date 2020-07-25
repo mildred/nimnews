@@ -23,6 +23,7 @@ Implementation status:
   very basic parsing of headers and body following mostly [RFC-822] [RFC-2822]
   and [RFC-5322]
 - [RFC-2919] and [RFC-2369]: List-Id and other List headers on feed email list
+- [RFC-2033] (LMTP), [RFC-821], [RFC-1869] (SMTP and ESMTP)
 
 Goals:
 
@@ -175,9 +176,12 @@ Responses:
 - `480` Disallowed unless the user is administrator
 
 
+[RFC-821]: https://tools.ietf.org/html/rfc821
 [RFC-822]: https://tools.ietf.org/html/rfc822
 [RFC-850]: https://tools.ietf.org/html/rfc850
 [RFC-977]: https://tools.ietf.org/html/rfc977
+[RFC-1869]: https://tools.ietf.org/html/rfc1869
+[RFC-2033]: https://tools.ietf.org/html/rfc2033
 [RFC-2142]: https://tools.ietf.org/html/rfc2142
 [RFC-2369]: https://tools.ietf.org/html/rfc2369
 [RFC-2822]: https://tools.ietf.org/html/rfc2822
