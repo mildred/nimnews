@@ -49,11 +49,12 @@ jobs:
         mkdir dist
         tar Jcf dist/nimnews-${{ steps.vars.outputs.release_name }}.tar.xz -C src nimnews
       
-    # https://github.com/marketplace/actions/create-release
-    - uses: ncipollo/release-action@v1
+    # https://github.com/marketplace/actions/github-release-create-update-and-upload-assets
+    - uses: meeDamian/github-release@2.0
       with:
-        artifacts: "dist/*"
-        allowUpdates: true
+        token: ${{ secrets.GITHUB_TOKEN }}
         prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
         tag: ${{ steps.vars.outputs.release_name }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        allow_override: true
+        files: dist/
+    
