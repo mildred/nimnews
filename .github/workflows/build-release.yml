@@ -42,6 +42,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: nimnews.tar.xz
-        tag_name: github.ref
+        tag_name: ${{ github.ref }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
