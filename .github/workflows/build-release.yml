@@ -22,13 +22,13 @@ jobs:
     steps:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
-      
+
     - name: Setup Nim environment
       uses: jiro4989/setup-nim-action@v1.0.5
       with:
         # The Nim version to download (if necessary) and use. Example: 1.0.2
         nim-version: stable # optional, default is stable
-    
+
     - name: Construct release name
       id: vars
       run: |
@@ -44,14 +44,14 @@ jobs:
     - name: Build
       run: |
         nimble install -d -y
-        nim c -d:ssl src/nimnews
-    
+        nim c -d:ssl -d:version=$(git describe --always) src/nimnews
+
     - name: package
       run: |
         mkdir dist
         cp src/nimnews dist/nimnews-${{ steps.vars.outputs.release_name }}
         tar Jcf dist/nimnews-${{ steps.vars.outputs.release_name }}.tar.xz -C src nimnews
-      
+
     # https://github.com/marketplace/actions/create-release
     - name: Release
       uses: ncipollo/release-action@v1

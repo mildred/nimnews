@@ -1,3 +1,16 @@
+import strformat
+import asyncnet, asyncdispatch, net
+import strutils, docopt, options
+import ./nntp/protocol as nntp
+import ./smtp/protocol as smtp
+import ./db/migrations
+import ./process_nntp
+import ./process_smtp
+import ./db
+import ./email
+
+const version {.strdefine.}: string = "(no version information)"
+
 const doc = """
 Nimnews is a simple newsgroup NNTP server
 
@@ -5,6 +18,7 @@ Usage: nimnews [options]
 
 Options:
   -h, --help            Print help
+  --version             Print version
   -p, --port <port>     Specify a different port [default: 119]
   -d, --db <file>       Database file [default: ./nimnews.sqlite]
   -f, --fqdn <fqdn>     Fully qualified domain name
@@ -24,19 +38,21 @@ Options:
   --tls-port <port>     Port number for NNTPS [default: 563]
   --cert <pemfile>      PEM certificate for STARTTLS
   --skey <pemfile>      PEM secret key for STARTTLS
+""") & (when not defined(version): "" else: &"""
+
+Version: {version}
 """)
 
-import asyncnet, asyncdispatch, net
-import strutils, docopt, strformat, options
-import ./nntp/protocol as nntp
-import ./smtp/protocol as smtp
-import ./db/migrations
-import ./process_nntp
-import ./process_smtp
-import ./db
-import ./email
 
 let args = docopt(doc)
+
+if args["--version"]:
+  echo version
+  when defined(version):
+    quit(0)
+  else:
+    quit(1)
+
 let
   arg_port      = Port(parse_int($args["--port"]))
   arg_db        = $args["--db"]
