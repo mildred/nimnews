@@ -26,6 +26,8 @@ jobs:
     - name: Git
       run: |
         git fetch --prune --unshallow origin
+        git status
+        echo Version:
         git describe --always
 
     - name: Setup Nim environment
