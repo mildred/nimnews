@@ -28,17 +28,9 @@ jobs:
       with:
         # The Nim version to download (if necessary) and use. Example: 1.0.2
         nim-version: stable # optional, default is stable
-
-    - name: Build
-      run: |
-        nimble install -d -y
-        nim c -d:ssl src/nimnews
-    
-    - name: package
-      run: tar Jcf nimnews.tar.xz -C src nimnews
     
     - name: Construct release name
-      id: release_name
+      id: vars
       run: |
         echo ::set-output name=release_name::${GITHUB_REF#refs/*/}
         if [[ "${GITHUB_REF#refs/tags/}" = "${GITHUB_REF#refs/*/}" ]]; then
@@ -47,12 +39,20 @@ jobs:
           echo ::set-output name=prerelease::false
         fi
 
+    - name: Build
+      run: |
+        nimble install -d -y
+        nim c -d:ssl src/nimnews
+    
+    - name: package
+      run: tar Jcf nimnews.tar.xz -C src nimnews
+
     # https://github.com/marketplace/actions/gh-release
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
         files: nimnews.tar.xz
-        tag_name: ${{ steps.release_name.outputs.release_name }}
-        prerelease: ${{ steps.release_name.outputs.prerelease }}
+        tag_name: ${{ steps.vars.outputs.release_name }}
+        prerelease: ${{ steps.vars.outputs.prerelease == "true" }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
