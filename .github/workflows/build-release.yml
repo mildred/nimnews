@@ -38,7 +38,7 @@ jobs:
         else
           echo ::set-output name=prerelease::true
           echo ::set-output name=release_name::latest-{GITHUB_REF#refs/*/}
-          git push origin +HEAD:refs/tags/latest-{GITHUB_REF#refs/*/}
+          git push origin +HEAD:refs/tags/latest-${GITHUB_REF#refs/*/}
         fi
 
     - name: Build
@@ -52,7 +52,9 @@ jobs:
         tar Jcf dist/nimnews-${{ steps.vars.outputs.release_name }}.tar.xz -C src nimnews
       
     # https://github.com/marketplace/actions/create-release
-    - uses: ncipollo/release-action@v1
+    - name: Release
+      #if: startsWith(github.ref, 'refs/tags/')
+      uses: ncipollo/release-action@v1
       with:
         artifacts: "dist/*"
         allowUpdates: true
