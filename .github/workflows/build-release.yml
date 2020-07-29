@@ -25,10 +25,7 @@ jobs:
 
     - name: Git
       run: |
-        git pull --tags
-        git tag -l
-        find .git/refs
-        git status
+        git fetch --prune --unshallow origin
         git describe --always
 
     - name: Setup Nim environment
