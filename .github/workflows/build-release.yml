@@ -32,11 +32,13 @@ jobs:
     - name: Construct release name
       id: vars
       run: |
-        echo ::set-output name=release_name::${GITHUB_REF#refs/*/}
         if [[ "${GITHUB_REF#refs/tags/}" = "${GITHUB_REF#refs/*/}" ]]; then
           echo ::set-output name=prerelease::false
+          echo ::set-output name=release_name::${GITHUB_REF#refs/*/}
         else
           echo ::set-output name=prerelease::true
+          echo ::set-output name=release_name::latest-{GITHUB_REF#refs/*/}
+          git push origin +HEAD:refs/tags/latest-{GITHUB_REF#refs/*/}
         fi
 
     - name: Build
@@ -49,12 +51,12 @@ jobs:
         mkdir dist
         tar Jcf dist/nimnews-${{ steps.vars.outputs.release_name }}.tar.xz -C src nimnews
       
-    # https://github.com/marketplace/actions/github-release-create-update-and-upload-assets
-    - uses: meeDamian/github-release@2.0
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+    # https://github.com/marketplace/actions/create-release
+    - uses: ncipollo/release-action@v1
+       with:
+        artifacts: "dist/*"
+        allowUpdates: true
         prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
         tag: ${{ steps.vars.outputs.release_name }}
-        allow_override: true
-        files: dist/
-    
+        token: ${{ secrets.GITHUB_TOKEN }}
+
