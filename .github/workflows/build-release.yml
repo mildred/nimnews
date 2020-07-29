@@ -23,6 +23,15 @@ jobs:
     # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
     - uses: actions/checkout@v2
 
+    - name: Git
+      run: |
+        git checkout ${{github.ref}}
+        git pull --tags
+        git tag -l
+        find .git/refs
+        git status
+        git describe --always
+
     - name: Setup Nim environment
       uses: jiro4989/setup-nim-action@v1.0.5
       with:
@@ -43,11 +52,6 @@ jobs:
 
     - name: Build
       run: |
-        git pull --tags
-        git tag -l
-        find .git/refs
-        git describe --always
-
         nimble install -d -y
         nim c -d:ssl -d:version=$(git describe --always) src/nimnews
 
