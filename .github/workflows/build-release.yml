@@ -45,7 +45,7 @@ jobs:
       run: |
         git pull --tags
         git tag -l
-        git show v0.0.0
+        find .git/refs
         git describe --always
 
         nimble install -d -y
