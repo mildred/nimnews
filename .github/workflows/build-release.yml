@@ -34,9 +34,9 @@ jobs:
       run: |
         echo ::set-output name=release_name::${GITHUB_REF#refs/*/}
         if [[ "${GITHUB_REF#refs/tags/}" = "${GITHUB_REF#refs/*/}" ]]; then
-          echo ::set-output name=prerelease::true
-        else
           echo ::set-output name=prerelease::false
+        else
+          echo ::set-output name=prerelease::true
         fi
 
     - name: Build
