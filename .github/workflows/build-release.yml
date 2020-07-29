@@ -47,7 +47,7 @@ jobs:
     - name: package
       run: |
         mkdir dist
-        tar Jcf dist/nimnews.tar.xz -C src nimnews
+        tar Jcf dist/nimnews-${{ steps.vars.outputs.release_name }}.tar.xz -C src nimnews
       
     # https://github.com/marketplace/actions/create-release
     - uses: ncipollo/release-action@v1
