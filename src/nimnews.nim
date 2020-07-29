@@ -151,10 +151,11 @@ type Proto = enum
   NNTP
 
 proc serve(tls: bool, proto: Proto) {.async.} =
-  var server = newAsyncSocket()
-  server.setSockOpt(OptReuseAddr, true)
+  var server: AsyncSocket
   case proto
   of NNTP:
+    server = newAsyncSocket()
+    server.setSockOpt(OptReuseAddr, true)
     if tls:
       when defined(ssl):
         server.bindAddr(arg_tls_port)
@@ -162,8 +163,11 @@ proc serve(tls: bool, proto: Proto) {.async.} =
       server.bindAddr(arg_port)
   of SMTP:
     if arg_smtp_socket != "":
+      server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
       server.bindUnix(arg_smtp_socket)
     else:
+      server = newAsyncSocket()
+      server.setSockOpt(OptReuseAddr, true)
       server.bindAddr(arg_smtp_port, arg_smtp_addr)
   server.listen()
 
