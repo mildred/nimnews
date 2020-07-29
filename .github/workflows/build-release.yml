@@ -47,6 +47,14 @@ jobs:
     - name: package
       run: tar Jcf nimnews.tar.xz -C src nimnews
 
+    - name: Clean Release if needed
+      uses: elgohr/Github-Hub-Action@master
+      continue-on-error: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: release delete ${{ steps.vars.outputs.release_name }}
+  
     # https://github.com/marketplace/actions/gh-release
     - name: Release
       uses: softprops/action-gh-release@v1
