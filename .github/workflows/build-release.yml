@@ -55,5 +55,5 @@ jobs:
         artifacts: "dist/*"
         allowUpdates: true
         prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
-        name: ${{ steps.vars.outputs.release_name }}
+        tag: ${{ steps.vars.outputs.release_name }}
         token: ${{ secrets.GITHUB_TOKEN }}
