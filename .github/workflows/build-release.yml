@@ -44,6 +44,9 @@ jobs:
     - name: Build
       run: |
         git pull --tags
+        git tag -l
+        git describe --always
+
         nimble install -d -y
         nim c -d:ssl -d:version=$(git describe --always) src/nimnews
 
