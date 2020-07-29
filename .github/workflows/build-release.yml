@@ -25,7 +25,6 @@ jobs:
 
     - name: Git
       run: |
-        git checkout ${{github.ref}}
         git pull --tags
         git tag -l
         find .git/refs
