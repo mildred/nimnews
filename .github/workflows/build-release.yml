@@ -45,22 +45,15 @@ jobs:
         nim c -d:ssl src/nimnews
     
     - name: package
-      run: tar Jcf nimnews.tar.xz -C src nimnews
-
-    - name: Clean Release if needed
-      uses: elgohr/Github-Hub-Action@master
-      continue-on-error: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        mkdir dist
+        tar Jcf dist/nimnews.tar.xz -C src nimnews
+      
+    # https://github.com/marketplace/actions/create-release
+    - uses: ncipollo/release-action@v1
       with:
-        args: release delete ${{ steps.vars.outputs.release_name }}
-  
-    # https://github.com/marketplace/actions/gh-release
-    - name: Release
-      uses: softprops/action-gh-release@v1
-      with:
-        files: nimnews.tar.xz
-        tag_name: ${{ steps.vars.outputs.release_name }}
+        artifacts: "dist/*"
+        allowUpdates: true
         prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        name: ${{ steps.vars.outputs.release_name }}
+        token: ${{ secrets.GITHUB_TOKEN }}
