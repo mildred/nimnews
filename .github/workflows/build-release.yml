@@ -53,7 +53,7 @@ jobs:
       
     # https://github.com/marketplace/actions/create-release
     - uses: ncipollo/release-action@v1
-       with:
+      with:
         artifacts: "dist/*"
         allowUpdates: true
         prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
