@@ -53,6 +53,6 @@ jobs:
       with:
         files: nimnews.tar.xz
         tag_name: ${{ steps.vars.outputs.release_name }}
-        prerelease: ${{ steps.vars.outputs.prerelease == "true" }}
+        prerelease: ${{ fromJson(steps.vars.outputs.prerelease) }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
