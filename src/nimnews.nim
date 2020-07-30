@@ -64,8 +64,8 @@ proc parse_sd_socket_activation(arg: string): int =
   return 0
 
 let
-  arg_port      = Port(parse_int($args["--port"]))
   arg_port_fd   = parse_sd_socket_activation($args["--port"])
+  arg_port      = Port(if arg_port_fd != 0: parse_int($args["--port"]) else: 119)
   arg_db        = $args["--db"]
   arg_fqdn      = if args["--fqdn"]: $args["--fqdn"] else: ""
   arg_secure    = args["--secure"]
@@ -84,8 +84,8 @@ let
   arg_smtp_socket = if args["--lmtp-socket"]: $args["--lmtp-socket"] else: ""
 
 when defined(ssl):
-  let arg_tls_port    = Port(parse_int($args["--tls-port"]))
   let arg_tls_port_fd = parse_sd_socket_activation($args["--tls-port"])
+  let arg_tls_port    = Port(if arg_tls_port_fd != 0: parse_int($args["--tls-port"]) else: 563)
   let arg_crypto =
     if args["--cert"] and args["--skey"]:
       net.newContext(
