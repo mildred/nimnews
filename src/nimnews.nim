@@ -8,6 +8,7 @@ import ./process_nntp
 import ./process_smtp
 import ./db
 import ./email
+import ./sd_daemon
 
 const version {.strdefine.}: string = "(no version information)"
 
@@ -20,6 +21,7 @@ Options:
   -h, --help            Print help
   --version             Print version
   -p, --port <port>     Specify a different port [default: 119]
+                        Specify sd=0 for first systemd socket activation
   -d, --db <file>       Database file [default: ./nimnews.sqlite]
   -f, --fqdn <fqdn>     Fully qualified domain name
   -s, --secure          Indicates that the connection is already encrypted
@@ -35,7 +37,7 @@ Options:
   --lmtp-addr <addr>    Specify listen address for LMTP [default: 127.0.0.1]
   --lmtp-socket <file>  Socket file for LMTP
 """ & (when not defined(ssl): "" else: """
-  --tls-port <port>     Port number for NNTPS [default: 563]
+  --tls-port <port>     Port number for NNTPS or sd=* [default: 563]
   --cert <pemfile>      PEM certificate for STARTTLS
   --skey <pemfile>      PEM secret key for STARTTLS
 """) & (when not defined(version): "" else: &"""
@@ -53,8 +55,17 @@ if args["--version"]:
   else:
     quit(1)
 
+proc parse_sd_socket_activation(arg: string): int =
+  let parts = arg.split("=")
+  if parts.len == 2 and parts[0] == "sd":
+    let n = parse_int(parts[1])
+    if n < sd_listen_fds():
+      return SD_LISTEN_FDS_START + n
+  return 0
+
 let
   arg_port      = Port(parse_int($args["--port"]))
+  arg_port_fd   = parse_sd_socket_activation($args["--port"])
   arg_db        = $args["--db"]
   arg_fqdn      = if args["--fqdn"]: $args["--fqdn"] else: ""
   arg_secure    = args["--secure"]
@@ -73,7 +84,8 @@ let
   arg_smtp_socket = if args["--lmtp-socket"]: $args["--lmtp-socket"] else: ""
 
 when defined(ssl):
-  let arg_tls_port = Port(parse_int($args["--tls-port"]))
+  let arg_tls_port    = Port(parse_int($args["--tls-port"]))
+  let arg_tls_port_fd = parse_sd_socket_activation($args["--tls-port"])
   let arg_crypto =
     if args["--cert"] and args["--skey"]:
       net.newContext(
@@ -170,13 +182,25 @@ proc serve(tls: bool, proto: Proto) {.async.} =
   var server: AsyncSocket
   case proto
   of NNTP:
-    server = newAsyncSocket()
-    server.setSockOpt(OptReuseAddr, true)
     if tls:
       when defined(ssl):
-        server.bindAddr(arg_tls_port)
+        if arg_tls_port_fd != 0:
+          let fd = cast[AsyncFD](arg_tls_port_fd)
+          server = newAsyncSocket(fd)
+          asyncdispatch.register(fd)
+        else:
+          server = newAsyncSocket()
+          server.setSockOpt(OptReuseAddr, true)
+          server.bindAddr(arg_tls_port)
     else:
-      server.bindAddr(arg_port)
+      if arg_port_fd != 0:
+        let fd = cast[AsyncFD](arg_port_fd)
+        asyncdispatch.register(fd)
+        server = newAsyncSocket(fd)
+      else:
+        server = newAsyncSocket()
+        server.setSockOpt(OptReuseAddr, true)
+        server.bindAddr(arg_port)
   of SMTP:
     if arg_smtp_socket != "":
       server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
