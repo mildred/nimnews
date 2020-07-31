@@ -28,7 +28,7 @@ Options:
   --admin               Indicates that every anonymous user is admin
   --log                 Log traffic
   --smtp <server>       Address of SMTP server to send e-mails
-  --smtp-port <port>    Port to connect to the SMTP server [default: 25]
+  --smtp-port <port>    Port to connect to the SMTP server [default: 587]
   --smtp-login <login>  Login for SMTP server
   --smtp-pass <pass>    Password for SMTP server
   --smtp-sender <email> Email address to send e-mails as
