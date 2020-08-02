@@ -19,18 +19,18 @@ proc set_article_list_headers(article: Article, group, fqdn, recipient: string):
     var h = parse_header(head)
     case h.name.to_lower:
     of "sender":
-      result.head = result.head & &"Original-Sender: {h.value}{CRLF}"
+      result.head = result.head & &"Original-Sender: {h.raw_value}{CRLF}"
     of "from":
-      result.head = result.head & &"Original-From: {h.value}{CRLF}"
-      from_a.add(h.value)
+      result.head = result.head & &"Original-From: {h.raw_value}{CRLF}"
+      from_a.add(h.raw_value)
     of "reply-to":
-      result.head = result.head & &"Original-Reply-To: {h.value}{CRLF}"
-      reply_to.add(h.value)
+      result.head = result.head & &"Original-Reply-To: {h.raw_value}{CRLF}"
+      reply_to.add(h.raw_value)
     of "to":
-      result.head = result.head & &"Original-To: {h.value}{CRLF}"
+      result.head = result.head & &"Original-To: {h.raw_value}{CRLF}"
       from_email = true
     of "cc":
-      result.head = result.head & &"Original-Cc: {h.value}{CRLF}"
+      result.head = result.head & &"Original-Cc: {h.raw_value}{CRLF}"
       from_email = true
     else:
       result.head = result.head & head & CRLF

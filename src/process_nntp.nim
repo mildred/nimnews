@@ -345,10 +345,10 @@ proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
     for head in parse_headers(art[2]):
       let h = head.parse_header
       case h.name.toLower
-      of "subject":    subject    = h.value
-      of "from":       from_h     = h.value
-      of "date":       date       = h.value
-      of "references": references = if references == "": h.value else: &"{references} {h.value}"
+      of "subject":    subject    = h.sl_value()
+      of "from":       from_h     = h.sl_value()
+      of "date":       date       = h.sl_value()
+      of "references": references = if references == "": h.sl_value else: &"{references} {h.sl_value}"
       else:            discard
     overview.add([art[0], subject, from_h, date, art[1], references, art[3], art[4]].join("\t"))
 

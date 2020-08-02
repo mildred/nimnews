@@ -15,10 +15,13 @@ type
 
   Header* = ref object
     name*: string
-    value*: string
+    raw_value*: string
 
 proc `$`*(art: Article): string =
   result = art.head & CRLF & art.body
+
+proc sl_value*(h: Header): string =
+  return h.raw_value.replace(CRLF, " ").replace("\n", " ").replace("\r", " ")
 
 proc parse_headers*(head: string): seq[string] =
   result = @[]
@@ -33,7 +36,7 @@ proc parse_headers*(head: string): seq[string] =
 proc parse_header*(line: string): Header =
   let parts = line.split(":", 1)
   let value = if len(parts) > 1: parts[1] else: ""
-  return Header(name: parts[0], value: value.strip(trailing = false))
+  return Header(name: parts[0], raw_value: value.strip(trailing = false))
 
 proc parse_article*(art: string): Article =
   let parts = art.split(CRLF&CRLF, 1)
@@ -44,14 +47,14 @@ proc parse_article*(art: string): Article =
     let header = parse_header(header)
     case header.name.toLower()
     of "path":
-      result.path = header.value
+      result.path = header.sl_value
     of "message-id":
-      result.message_id = header.value
+      result.message_id = header.sl_value
     of "newsgroups":
-      for group in header.value.split(","):
+      for group in header.sl_value.split(","):
         result.newsgroups.add(group.strip())
     of "sender":
-      result.sender = header.value
+      result.sender = header.sl_value
 
 const messageIdTimestampFormat: TimeFormat = initTimeFormat("yyyyMMddHHmmssfff")
 
