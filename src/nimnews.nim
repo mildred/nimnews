@@ -40,6 +40,14 @@ Options:
   --tls-port <port>     Port number for NNTPS or sd=* [default: 563]
   --cert <pemfile>      PEM certificate for STARTTLS
   --skey <pemfile>      PEM secret key for STARTTLS
+""") & ("""
+
+Note: systemd socket activation can be enabled using the syntax sd=*:
+
+  sd=N                  Takes the Nth passed socket, can be risky if multiple
+                        sockets are passed. N starts at 0.
+  sd=NAME:N             Takes the socket with the corresponding NAME, take the
+                        Nth socket with that name. N starts at 0.
 """) & (when not defined(version): "" else: &"""
 
 Version: {version}
@@ -56,11 +64,24 @@ if args["--version"]:
     quit(1)
 
 proc parse_sd_socket_activation(arg: string): int =
-  let parts = arg.split("=")
+  var parts = arg.split("=")
   if parts.len == 2 and parts[0] == "sd":
-    let n = parse_int(parts[1])
-    if n < sd_listen_fds():
-      return SD_LISTEN_FDS_START + n
+    parts = parts[1].split(':', 1)
+    if parts.len == 1:
+      let n = parse_int(parts[0])
+      if n < sd_listen_fds():
+        return SD_LISTEN_FDS_START + n
+    else:
+      let fds = sd_listen_fds_with_names()
+      var n = parse_int(parts[1])
+      var fd = SD_LISTEN_FDS_START
+      for fdname in fds:
+        if fdname == parts[0]:
+          if n == 0:
+            return fd
+          else:
+            n = n - 1
+        fd = fd + 1
   return 0
 
 proc parse_port(arg: string, def: int): Port =

@@ -98,7 +98,7 @@ proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     art.insertArticle(cx.smtp, db)
     return Response(code: "250", text: &"OK, posted to {head_news}")
   else:
-    return Response(code: "250", text: &"ignored")
+    return Response(code: "250", text: &"Handled by robot")
 
 proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command
