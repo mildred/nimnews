@@ -76,7 +76,9 @@ proc processRcptTo(cx: CxState, cmd: Command): Response =
 
   cx.rcpt_to.add(local_part.get)
 
-  return Response(code: "250", text: "OK")
+  case local_part.get.kind
+  of LocalPartGroup:
+    return Response(code: "250", text: &"OK, posting to {local_part.get.group_name}")
 
 proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   if cx.mail_from.len == 0 or cx.rcpt_to.len == 0:
