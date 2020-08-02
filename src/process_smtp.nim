@@ -96,7 +96,9 @@ proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     let head_news = art.newsgroups.join(", ")
     art.head = &"Newsgroups: {head_news}{CRLF}" & art.head
     art.insertArticle(cx.smtp, db)
-  return Response(code: "250", text: "OK")
+    return Response(code: "250", text: &"OK, posted to {head_news}")
+  else:
+    return Response(code: "250", text: &"ignored")
 
 proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
   case cmd.command
