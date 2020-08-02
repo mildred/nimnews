@@ -35,7 +35,7 @@ Options:
   --smtp-debug          Debug SMTP
   --lmtp-port <port>    Specify port for LMTP [default: 24]
   --lmtp-addr <addr>    Specify listen address for LMTP [default: 127.0.0.1]
-  --lmtp-socket <file>  Socket file for LMTP
+  --lmtp-socket <file>  Socket file for LMTP, can be sd=N for systemd
 """ & (when not defined(ssl): "" else: """
   --tls-port <port>     Port number for NNTPS or sd=* [default: 563]
   --cert <pemfile>      PEM certificate for STARTTLS
@@ -85,9 +85,10 @@ let
     sender: if args["--smtp-sender"]: $args["--smtp-sender"] else: &"no-reply@{arg_fqdn}",
     debug:  args["--smtp-debug"],
     fqdn:   arg_fqdn)
-  arg_smtp_port   = Port(parse_int($args["--lmtp-port"]))
-  arg_smtp_addr   = $args["--lmtp-addr"]
-  arg_smtp_socket = if args["--lmtp-socket"]: $args["--lmtp-socket"] else: ""
+  arg_smtp_port      = Port(parse_int($args["--lmtp-port"]))
+  arg_smtp_addr      = $args["--lmtp-addr"]
+  arg_smtp_socket    = if args["--lmtp-socket"]: $args["--lmtp-socket"] else: ""
+  arg_smtp_sd_socket = parse_sd_socket_activation($args["--lmtp-socket"])
 
 when defined(ssl):
   let arg_tls_port_fd = parse_sd_socket_activation($args["--tls-port"])
@@ -209,8 +210,13 @@ proc serve(tls: bool, proto: Proto) {.async.} =
         server.bindAddr(arg_port)
   of SMTP:
     if arg_smtp_socket != "":
-      server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
-      server.bindUnix(arg_smtp_socket)
+      if arg_smtp_sd_socket != 0:
+        let fd = cast[AsyncFD](arg_smtp_sd_socket)
+        asyncdispatch.register(fd)
+        server = newAsyncSocket(fd)
+      else:
+        server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
+        server.bindUnix(arg_smtp_socket)
     else:
       server = newAsyncSocket()
       server.setSockOpt(OptReuseAddr, true)
