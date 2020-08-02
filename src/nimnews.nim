@@ -195,32 +195,39 @@ proc serve(tls: bool, proto: Proto) {.async.} =
           let fd = cast[AsyncFD](arg_tls_port_fd)
           server = newAsyncSocket(fd)
           asyncdispatch.register(fd)
+          echo &"Listen NNTPS on fd={arg_tls_port_fd}"
         else:
           server = newAsyncSocket()
           server.setSockOpt(OptReuseAddr, true)
           server.bindAddr(arg_tls_port)
+          echo &"Listen NNTPS on port {arg_tls_port}"
     else:
       if arg_port_fd != 0:
         let fd = cast[AsyncFD](arg_port_fd)
         asyncdispatch.register(fd)
         server = newAsyncSocket(fd)
+        echo &"Listen NNTP on fd={arg_port_fd}"
       else:
         server = newAsyncSocket()
         server.setSockOpt(OptReuseAddr, true)
         server.bindAddr(arg_port)
+        echo &"Listen NNTP on port {arg_port}"
   of SMTP:
     if arg_smtp_socket != "":
       if arg_smtp_sd_socket != 0:
         let fd = cast[AsyncFD](arg_smtp_sd_socket)
         asyncdispatch.register(fd)
         server = newAsyncSocket(fd)
+        echo &"Listen SMTP on fd={arg_smtp_sd_socket}"
       else:
         server = newAsyncSocket(AF_UNIX, SOCK_STREAM, IPPROTO_IP)
         server.bindUnix(arg_smtp_socket)
+        echo &"Listen SMTP on {arg_smtp_socket}"
     else:
       server = newAsyncSocket()
       server.setSockOpt(OptReuseAddr, true)
       server.bindAddr(arg_smtp_port, arg_smtp_addr)
+      echo &"Listen SMTP on {arg_smtp_addr} port {arg_smtp_port}"
   server.listen()
 
   while true:
