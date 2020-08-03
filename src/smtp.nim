@@ -62,6 +62,7 @@ type
     sock: SocketType
     address: string
     debug: bool
+    extensions: seq[string]
 
   Smtp* = SmtpBase[Socket]
   AsyncSmtp* = SmtpBase[AsyncSocket]
@@ -226,10 +227,31 @@ proc checkReply*(smtp: Smtp | AsyncSmtp, reply: string) {.multisync.} =
   if not line.startswith(reply):
     await quitExcpt(smtp, "Expected " & reply & " reply, got: " & line)
 
+proc checkMultilineReply*(smtp: Smtp | AsyncSmtp, reply: string, lines: var seq[string]) {.multisync.} =
+  lines = @[]
+  var line = await smtp.debugRecv()
+  if not line.startswith(reply):
+    await quitExcpt(smtp, "Expected " & reply & " reply, got: " & line)
+  let code = line[0 .. 2]
+  while line.startswith(code & "-"):
+    line = await smtp.debugRecv()
+    stripLineEnd(line)
+    lines.add(line[4 .. ^1])
+  if not line.startswith(code & " "):
+    await quitExcpt(smtp, "Expected " & code & " reply, got: " & line)
+
 proc helo*(smtp: Smtp | AsyncSmtp) {.multisync.} =
   # Sends the HELO request
   await smtp.debugSend("HELO " & smtp.address & "\c\L")
   await smtp.checkReply("250")
+
+proc ehlo*(smtp: Smtp | AsyncSmtp) {.multisync.} =
+  # Sends the HELO request
+  await smtp.debugSend("EHLO " & smtp.address & "\c\L")
+  await smtp.checkMultilineReply("250", smtp.extensions)
+
+proc extensions*(smtp: Smtp | AsyncSmtp): seq[string] =
+  return smtp.extensions
 
 proc connect*(smtp: Smtp | AsyncSmtp,
               address: string, port: Port) {.multisync.} =
@@ -238,21 +260,31 @@ proc connect*(smtp: Smtp | AsyncSmtp,
   smtp.address = address
   await smtp.sock.connect(address, port)
   await smtp.checkReply("220")
-  await smtp.helo()
+  await smtp.ehlo()
 
-proc startTls*(smtp: Smtp | AsyncSmtp, sslContext: SSLContext = nil) {.multisync.} =
+proc tryStartTls*(smtp: Smtp | AsyncSmtp, sslContext: SSLContext = nil): Future[bool] {.multisync.} =
   ## Put the SMTP connection in TLS (Transport Layer Security) mode.
-  ## May fail with ReplyError
+  ## Returns false if it fails
   await smtp.debugSend("STARTTLS\c\L")
-  await smtp.checkReply("220")
+  let res = await smtp.debugRecv()
+  if not res.startswith("220"):
+    return false
+
   when compiledWithSsl:
     if sslContext == nil:
       getSSLContext().wrapConnectedSocket(smtp.sock, handshakeAsClient)
     else:
       sslContext.wrapConnectedSocket(smtp.sock, handshakeAsClient)
-    await smtp.helo()
+    await smtp.ehlo()
+    return true
   else:
     {.error: "SMTP module compiled without SSL support".}
+
+proc startTls*(smtp: Smtp | AsyncSmtp, sslContext: SSLContext = nil) {.multisync.} =
+  ## Put the SMTP connection in TLS (Transport Layer Security) mode.
+  ## May fail with ReplyError
+  if not await smtp.tryStartTls(sslContext):
+    await quitExcpt(smtp, "Expected 220 reply")
 
 proc auth*(smtp: Smtp | AsyncSmtp, username, password: string) {.multisync.} =
   ## Sends an AUTH command to the server to login as the `username`

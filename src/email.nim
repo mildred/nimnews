@@ -14,14 +14,16 @@ type
 proc send_email*(cfg: SmtpConfig, sender, recipient: string, msg: string) =
   var smtpConn = newSmtp(debug=cfg.debug)
   let port = Port(if cfg.port == 0: 25 else: cfg.port)
+  if cfg.debug:
+    echo msg
   smtpConn.connect(cfg.server, port)
   defer: smtpConn.close()
-  try:
-    smtpConn.startTls()
-  except:
-    smtpConn.close()
-    smtpConn = newSmtp(debug=cfg.debug)
-    smtpConn.connect(cfg.server, port)
+  if smtpConn.extensions().contains("STARTTLS"):
+    try:
+      discard smtpConn.tryStartTls()
+    except:
+      smtpConn = newSmtp(debug=cfg.debug)
+      smtpConn.connect(cfg.server, port)
   echo $cfg.user
   if cfg.user != "":
     smtpConn.auth(cfg.user, cfg.pass)
