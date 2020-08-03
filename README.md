@@ -95,6 +95,8 @@ TODO
 
 - [ ] Include the SMTP server, probably as a process spawned from NimNews.
 
+- [ ] Be 8-bit safe, end line markers are probably to blame here.
+
 Build
 -----
 

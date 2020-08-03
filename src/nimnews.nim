@@ -8,7 +8,8 @@ import ./process_nntp
 import ./process_smtp
 import ./db
 import ./email
-import ./sd_daemon
+import ./utils/parse_port
+import ./utils/lineproto
 
 const version {.strdefine.}: string = "(no version information)"
 
@@ -63,33 +64,6 @@ if args["--version"]:
   else:
     quit(1)
 
-proc parse_sd_socket_activation(arg: string): int =
-  var parts = arg.split("=")
-  if parts.len == 2 and parts[0] == "sd":
-    parts = parts[1].split(':', 1)
-    if parts.len == 1:
-      let n = parse_int(parts[0])
-      if n < sd_listen_fds():
-        return SD_LISTEN_FDS_START + n
-    else:
-      let fds = sd_listen_fds_with_names()
-      var n = parse_int(parts[1])
-      var fd = SD_LISTEN_FDS_START
-      for fdname in fds:
-        if fdname == parts[0]:
-          if n == 0:
-            return fd
-          else:
-            n = n - 1
-        fd = fd + 1
-  return 0
-
-proc parse_port(arg: string, def: int): Port =
-  let parts = arg.split("=")
-  if parts.len == 2 and parts[0] == "sd":
-    return Port(def)
-  return Port(parse_int(arg))
-
 let
   arg_port_fd   = parse_sd_socket_activation($args["--port"])
   arg_port      = parse_port($args["--port"], 119)
@@ -127,27 +101,6 @@ if arg_fqdn == "":
   echo "Missing fully qualified domain name"
   quit(1)
 
-proc get_read(client: AsyncSocket, proto: string): proc(): Future[Option[string]] =
-  return proc(): Future[Option[string]] {.async.} =
-    var line = await client.recvLine()
-    if line == "": return none string
-    stripLineEnd(line)
-    result = some line
-    if arg_log: echo &"{proto} < {result.get}"
-
-proc get_write(client: AsyncSocket, proto: string): proc(line: string): Future[void] =
-  return proc(line: string) {.async.} =
-    await client.send(line)
-    if arg_log:
-      var l = line
-      stripLineEnd(l)
-      echo &"{proto} > {l}"
-
-proc get_starttls(client: AsyncSocket): proc() =
-  return proc() =
-    when defined(ssl):
-      wrapConnectedSocket(arg_crypto, client, handshakeAsServer)
-
 proc processClient(client0: AsyncSocket, secure: bool = arg_secure) {.async.} =
   var db: Db = connect(arg_db, arg_fqdn)
   defer: db.close()
@@ -165,9 +118,9 @@ proc processClient(client0: AsyncSocket, secure: bool = arg_secure) {.async.} =
     return cx.process(cmd, data, db)
 
   let conn = nntp.Connection(
-    read: get_read(client, "NNTP"),
-    write: get_write(client, "NNTP"),
-    starttls: get_starttls(client),
+    read: get_read(client, "NNTP", arg_log),
+    write: get_write(client, "NNTP", arg_log),
+    starttls: get_starttls(client, arg_crypto),
     process: process)
 
   await conn.handle_protocol()
@@ -186,9 +139,9 @@ proc processSmtpClient(client0: AsyncSocket) {.async.} =
     return cx.process(cmd, data, db)
 
   let conn = smtp.Connection(
-    read: get_read(client, "LMTP"),
-    write: get_write(client, "LMTP"),
-    starttls: get_starttls(client),
+    read: get_read(client, "LMTP", arg_log),
+    write: get_write(client, "LMTP", arg_log),
+    starttls: get_starttls(client, arg_crypto),
     process: process)
 
   await conn.handle_protocol()

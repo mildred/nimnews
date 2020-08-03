@@ -1,4 +1,4 @@
-import os, strutils, options, strformat
+import os, strutils, strformat
 
 const SD_LISTEN_FDS_START* = 3
 # The first passed file descriptor number

@@ -66,6 +66,76 @@ type
 
     process*:  proc(cmd: Command, body: Option[string]): Response
 
+  ClientResponse* = ref object
+    code: string
+    text: string
+
+  Client* = ref object
+    read*:     proc(): Future[Option[string]]
+    ## Read a line and return it with end line markers removed
+    ## Returns none(string) at end of stream
+
+    write*:    proc(line: string): Future[void]
+    ## Write a line to the client, the passed string must contain the CRLF end
+    ## line marker
+
+proc read_response*(client: Client): Future[Option[ClientResponse]] {.async.} =
+  let res = await client.read()
+  if res.is_none:
+    return none ClientResponse
+  elif res.get.len < 4:
+    return some ClientResponse(
+      code: "",
+      text: res.get)
+  else:
+    return some ClientResponse(
+      code: res.get[0 .. 2],
+      text: res.get[3 .. ^1].strip(trailing=false))
+
+proc int_code*(resp: ClientResponse): int =
+  return parse_int(resp.code)
+
+proc `$`*(resp: ClientResponse): string =
+  if resp.code == "":
+    return resp.text
+  else:
+    return &"{resp.code} {resp.text}"
+
+proc request*(client: Client, req: string): Future[Option[ClientResponse]] {.async.} =
+  var line = req
+  stripLineEnd(line)
+  await client.write(line & CRLF)
+  return await client.read_response()
+
+proc read_lines*(conn: Client | Connection, single_line: bool = false): Future[Option[string]] {.async.} =
+  var data = ""
+  while true:
+    var dataline = await conn.read()
+    if dataline.is_none:
+      return none string
+    elif single_line:
+      return some dataline.get
+    elif dataline.get == ".":
+      return some data
+    elif dataline.get == "":
+      data = data & CRLF
+    elif dataline.get[0] == '.':
+      data = data & dataline.get[1..^1] & CRLF
+    else:
+      data = data & dataline.get & CRLF
+
+proc split_lines*(lines: string): seq[string] =
+  var content = lines
+  stripLineEnd(content)
+  return content.split(CRLF)
+
+proc write_lines*(conn: Client | Connection, content: string): Future[void] {.async.} =
+    for line in content.split_lines():
+      if len(line) > 0 and line[0] == '.':
+        await conn.write(&".{line}{CRLF}")
+      else:
+        await conn.write(&"{line}{CRLF}")
+    await conn.write(&".{CRLF}")
 
 proc split_command(line: string, n: int, cmd, args: var string) =
   let splitted = line.splitWhitespace(n)
@@ -107,14 +177,7 @@ proc parse_range*(range: string, first, last: var Option[int]) =
 proc send*(res: Response, conn: Connection) {.async.} =
   await conn.write(&"{res.code} {res.text}{CRLF}")
   if res.content.is_some:
-    var content = res.content.get
-    stripLineEnd(content)
-    for line in content.split(CRLF):
-      if len(line) > 0 and line[0] == '.':
-        await conn.write(&".{line}{CRLF}")
-      else:
-        await conn.write(&"{line}{CRLF}")
-    await conn.write(&".{CRLF}")
+    await conn.write_lines(res.content.get)
 
 proc handle_protocol*(conn: Connection) {.async.} =
   let initial_cmd = Command(command: CommandConnected)
@@ -128,23 +191,8 @@ proc handle_protocol*(conn: Connection) {.async.} =
     var response = conn.process(command, none(string))
     await response.send(conn)
     while response.expect_body or response.expect_line:
-      var data = ""
-      while true:
-        var dataline = await conn.read()
-        if dataline.is_none:
-          break
-        elif response.expect_line:
-          data = dataline.get
-          break
-        elif dataline.get == ".":
-          break
-        elif dataline.get == "":
-          data = data & CRLF
-        elif dataline.get[0] == '.':
-          data = data & dataline.get[1..^1] & CRLF
-        else:
-          data = data & dataline.get & CRLF
-      response = conn.process(command, some data)
+      let data = await conn.read_lines(single_line = response.expect_line)
+      response = conn.process(command, data)
       await response.send(conn)
     if response.quit:
       break
