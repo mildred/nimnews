@@ -468,7 +468,7 @@ proc processIHave(cx: CxState, cmd: Command, data: Option[string], db: Db): Resp
     if article.message_id != msg_id:
       return Response(code: "436", text: "transfer failed - try again later")
 
-    article.insertArticle(cx.smtp, db)
+    article.insert_article(false, cx.smtp, db, "NNTP-IHAVE")
     return Response(code: "235", text: "article transferred ok")
 
 proc processPost(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
@@ -490,7 +490,7 @@ proc processPost(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     if res[0] != "0":
       return Response(code: "441", text: "posting failed")
 
-    article.insertArticle(cx.smtp, db)
+    article.insert_article(false, cx.smtp, db, "NNTP-POST")
     return Response(code: "240", text: "article posted ok")
 
 proc processListUsers(cx: CxState, cmd: Command, db: DbConn): Response =

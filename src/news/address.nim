@@ -1,9 +1,9 @@
 import options, strformat, strutils
 
 type
-  NameAddress = ref object
-    name: Option[string]
-    address: Address
+  NameAddress* = ref object
+    name*: Option[string]
+    address*: Address
 
   Address* = ref object
     local_part*: string
@@ -11,7 +11,7 @@ type
 
 proc `$`*(a: Address): string =
   if a.domain.is_some:
-    return &"{a.local_part}@{a.domain}"
+    return &"{a.local_part}@{a.domain.get}"
   else:
     return a.local_part
 
@@ -22,17 +22,10 @@ proc parse_address*(a: string): Address =
   else:
     return Address(local_part: parts[0], domain: some parts[1])
 
-#let name_address_peg = sequence(whitespace(), term "<", capture(), term ">")
-#let name_addresses_peg = peg"""
-#  name_addresses <- ( name_address (',' name_address)* )?
-#  name_address <- { (. !(','/'<'))* } { ('<' @ '>' {ws})? }
-#  ws <- \s*
-#"""
-
 proc `$`*(a: NameAddress): string =
   let adr = $a.address
   if a.name.is_some:
-    return &"{a.name}<{adr}>"
+    return &"{a.name.get}<{adr}>"
   else:
     return adr
 
@@ -74,4 +67,10 @@ proc parse_name_address*(a: string): seq[NameAddress] =
           name: none(string),
           address: parse_address(str)))
       i = cm + 1
+
+proc contains_email*(na: seq[NameAddress], email: string): bool =
+  for addr in na:
+    if $addr.address == email:
+      return true
+  return false
 

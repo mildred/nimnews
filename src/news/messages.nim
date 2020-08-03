@@ -12,6 +12,7 @@ type
     message_id*: string
     newsgroups*: seq[string]
     sender*: string
+    from_header*: string
 
   Header* = ref object
     name*: string
@@ -21,7 +22,8 @@ proc `$`*(art: Article): string =
   result = art.head & CRLF & art.body
 
 proc sl_value*(h: Header): string =
-  return h.raw_value.replace(CRLF, " ").replace("\n", " ").replace("\r", " ")
+  # Single line value
+  return h.raw_value.replace(CRLF, "").replace("\n", "").replace("\r", "")
 
 proc parse_headers*(head: string): seq[string] =
   result = @[]
@@ -55,6 +57,10 @@ proc parse_article*(art: string): Article =
         result.newsgroups.add(group.strip())
     of "sender":
       result.sender = header.sl_value
+    of "from":
+      result.from_header =
+        if result.from_header == "":  header.sl_value
+        else:                         result.from_header & " " & header.sl_value
 
 const messageIdTimestampFormat: TimeFormat = initTimeFormat("yyyyMMddHHmmssfff")
 
