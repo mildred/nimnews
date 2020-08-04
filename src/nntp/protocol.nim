@@ -28,9 +28,10 @@ type
     CommandMODE         = "MODE"
     CommandSTARTTLS     = "STARTTLS"
 
-    CommandDATE  = "DATE"
-    CommandOVER  = "OVER"
-    CommandXOVER = "XOVER"
+    CommandDATE              = "DATE"
+    CommandOVER              = "OVER"
+    CommandXOVER             = "XOVER"
+    CommandLIST_OVERVIEW_FMT = "LIST OVERVIEW.FMT"
 
     CommandLIST_USERS = "LIST USERS"
     CommandLIST_FEEDS = "LIST FEEDS"
@@ -67,8 +68,8 @@ type
     process*:  proc(cmd: Command, body: Option[string]): Response
 
   ClientResponse* = ref object
-    code: string
-    text: string
+    code*: string
+    text*: string
 
   Client* = ref object
     read*:     proc(): Future[Option[string]]

@@ -1,4 +1,4 @@
-import strformat
+import strformat, nre, strutils
 import asyncnet, asyncdispatch, net
 import strutils, docopt, options, logging
 import jester
@@ -52,15 +52,27 @@ let
 
 import controllers/index
 import controllers/group_index
+import controllers/group_thread
 
 proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
-  case request.pathInfo
-  of "/":
+  if request.pathInfo == "/":
     return await index(request, news)
-  else:
-    return await group_index(request, news)
-    #block route:
-    #  resp Http404, "Not found!"
+
+  var m = request.pathInfo.match(re"^/group/([^/]*)/?$")
+  if m.is_some:
+    return await group_index(request, news, m.get.captures[0])
+
+  m = request.pathInfo.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)/?$")
+  if m.is_some:
+    return await group_thread(request, news,
+      group = m.get.captures[0],
+      num = m.get.captures[1].parse_int,
+      first = m.get.captures[2].parse_int,
+      last = m.get.captures[3].parse_int,
+      endnum = m.get.captures[4].parse_int)
+
+  block route:
+    resp Http404, "Not found!"
 
 var server = initJester(match, settings)
 server.serve()

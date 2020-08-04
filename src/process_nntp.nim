@@ -283,8 +283,17 @@ proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response =
 
   return Response(code: "230", text: "list of new articles by message-id follows", content: some(list))
 
-proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
+let overview_fmt = [
+  "Subject:",
+  "From:",
+  "Date:",
+  "Message-ID:",
+  "References:",
+  ":bytes",
+  ":lines"
+]
 
+proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
   var arts: seq[Row]
   if cmd.args.len > 0 and cmd.args[0] == '<':
     if cx.cur_group_name.isNone:
@@ -353,6 +362,10 @@ proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
     overview.add([art[0], subject, from_h, date, art[1], references, art[3], art[4]].join("\t"))
 
   return Response(code: "224", text: &"Overview information follows", content: some overview.join(CRLF))
+
+proc processListOverviewFmt(cx: CxState, cmd: Command, db: Db): Response =
+  return Response(code: "215", text: "Order of the fields in overview database",
+    content: some(overview_fmt.join(CRLF)))
 
 proc processArticle(cx: CxState, cmd: Command, db: DbConn): Response =
   if cx.cur_group_name.isNone:
@@ -616,6 +629,8 @@ proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response
     return cx.processNewNews(cmd, db.conn)
   of CommandXOVER, CommandOVER:
     return cx.processOver(cmd, db.conn)
+  of CommandLIST_OVERVIEW_FMT:
+    return cx.processListOverviewFmt(cmd, db)
   of CommandARTICLE, CommandBODY, CommandHEAD, CommandSTAT:
     return cx.processArticle(cmd, db.conn)
   of CommandLAST:
