@@ -1,12 +1,13 @@
 import tables, algorithm, strformat
 import templates
 import ../data/article
+import ./name_address
 
 proc thread_children(root: ArticleTree, include_root: bool, link: string): string = tmpli html"""
   <article id="article-num-$(root.article.num)">
     <p>
       <a href="$link#article-num-$(root.article.num)">$(root.article.subject)</a>
-      <em>by $(root.article.from_h) ($(root.article.date))</em>
+      <em>by $(name_address(root.article.from_h)) ($(root.article.date))</em>
     </p>
     <pre>$(root.body)</pre>
   </article>

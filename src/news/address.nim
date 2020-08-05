@@ -1,4 +1,5 @@
 import options, strformat, strutils
+import ./encoded_words
 
 type
   NameAddress* = ref object
@@ -14,6 +15,12 @@ proc `$`*(a: Address): string =
     return &"{a.local_part}@{a.domain.get}"
   else:
     return a.local_part
+
+proc decoded_name*(na: NameAddress): string =
+  if na.name.is_none:
+    return $na.address
+  else:
+    return na.name.get.decode_encoded_words.strip
 
 proc parse_address*(a: string): Address =
   let parts = a.split("@", 1)

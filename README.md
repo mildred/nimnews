@@ -25,7 +25,7 @@ Implementation status and RFCs
   and [RFC-5322]
 - [RFC-2919] and [RFC-2369]: List-Id and other List headers on feed email list
 - [RFC-2033] (LMTP), [RFC-821], [RFC-1869] (SMTP and ESMTP)
-- [RFC-2047] encoded words: not implemented
+- [RFC-2047] encoded words
 
 Goals
 -----
