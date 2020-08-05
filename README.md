@@ -25,6 +25,7 @@ Implementation status and RFCs
   and [RFC-5322]
 - [RFC-2919] and [RFC-2369]: List-Id and other List headers on feed email list
 - [RFC-2033] (LMTP), [RFC-821], [RFC-1869] (SMTP and ESMTP)
+- [RFC-2047] encoded words: not implemented
 
 Goals
 -----
@@ -71,13 +72,6 @@ Connection is performed using standard LMTP.
 TODO
 ----
 
-- [ ] Handle List-Id and list-specific headers when sending in LIST mode. Handle
-  incoming e-mail coming to the subscribe and unsubscribe addresses.
-
-    - subscribe-group.name@fqdn.example.net: create an e-mail feed after a
-      successful challenge
-    - unsubscribe-group.name@fqdn.example.net: stop the e-mail subscription
-
 - [ ] Do not mangle Form header if DMARC is not enabled on the author domain
 
 - [ ] Handle user permission, only allow posting if the From header matches the user
@@ -95,7 +89,7 @@ TODO
 
 - [ ] Include the SMTP server, probably as a process spawned from NimNews.
 
-- [ ] Be 8-bit safe, end line markers are probably to blame here.
+- [ ] Be binary safe, end line markers are probably to blame here.
 
 Build
 -----
@@ -143,6 +137,12 @@ Options:
   --cert <pemfile>      PEM certificate for STARTTLS
   --skey <pemfile>      PEM secret key for STARTTLS
 ```
+
+NewsWeb web interface
+=====================
+
+This package also contains the newsweb web interface that is a forum interface
+for the Web designed to work with nimnews.
 
 X-NIMNEWS Extension
 ===================
@@ -226,6 +226,7 @@ Responses:
 [RFC-977]: https://tools.ietf.org/html/rfc977
 [RFC-1869]: https://tools.ietf.org/html/rfc1869
 [RFC-2033]: https://tools.ietf.org/html/rfc2033
+[RFC-2047]: https://tools.ietf.org/html/rfc2047
 [RFC-2142]: https://tools.ietf.org/html/rfc2142
 [RFC-2369]: https://tools.ietf.org/html/rfc2369
 [RFC-2822]: https://tools.ietf.org/html/rfc2822
