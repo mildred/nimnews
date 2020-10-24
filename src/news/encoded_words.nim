@@ -1,4 +1,17 @@
-import nre, encodings, base64, strutils
+import base64, strutils, npeg, strformat, sequtils
+
+when defined(js):
+  import jsffi
+  var window {.importc, nodecl.}: JsObject
+
+  proc convert(data, destEncoding, srcEncoding: string): string =
+    if destEncoding.toUpper != "UTF-8":
+      raise newException(CatchableError, &"Unsupported encoding from {srcEncoding} to {destEncoding}")
+    let buf = window.Uint8Array.from(cast[JsObject](data))
+    let dec = jsNew window.TextDecoder(srcEncoding)
+    result = $dec.decode(buf).to(cstring)
+else:
+  import encodings
 
 type
   EncodedWordEncoding = enum
@@ -10,16 +23,51 @@ type
     encoding*: EncodedWordEncoding
     data*:     string
 
-let encoded_word = re"=\?([^ \t\?]+)\?([QB])\?([^ \t\?]*)\?="
-let qbyte = re"=([a-fA-F0-9][a-fA-F0-9])"
+  Word* = ref object
+    offset: int
+    case encoded*: bool
+    of true:
+      word*: EncodedWord
+    of false:
+      data*: string
 
-proc decode_qbyte(match: RegexMatch): string =
-  result = parseHexStr(match.captures[0])
+  EncodedHeader* = seq[Word]
+
+let encoded_header = peg("enc_head", h: EncodedHeader):
+  part     <- +( 1 - {' ', '\t', '\n', '\r', '?'})
+  encoding <- {'Q', 'B'}
+  enc_word <- "=?" * >part * "?" * >encoding * "?" * >part * "?=":
+    h = h.filterIt(it.offset < @0)
+    h.add(Word(
+      offset:  @0,
+      encoded: true,
+      word:    EncodedWord(
+        charset:  $1,
+        encoding: parseEnum[EncodedWordEncoding]($2),
+        data:     $3)))
+
+  stop     <- !1
+  not_enc  <- >( *( !enc_word * 1 )):
+    h = h.filterIt(it.offset < @0)
+    if ($1).len > 0: h.add(Word(offset: @0, encoded: false, data: $1))
+  enc_head <- *( not_enc * enc_word ) * not_enc * stop
+
+let qdata = peg("data", res: string):
+  hex        <- {'a'..'f'} | {'A'..'F'} | {'0'..'9'}
+  enc_byte   <- '=' * >(hex * hex):
+    res = res & parseHexStr($1)
+  underscore <- >"_":
+    res = res & " "
+  char       <- >(1):
+    res = res & $1
+  data       <- *( enc_byte | underscore | char )
 
 proc binary_data*(word: EncodedWord): string =
   case word.encoding
   of QEncode:
-    result = word.data.replace('_', ' ').replace(qbyte, decode_qbyte)
+    result = ""
+    if not qdata.match(word.data, result).ok:
+      raise newException(CatchableError, &"syntax error in encoded words {word.data}")
   of Base64:
     result = base64.decode(word.data)
 
@@ -27,12 +75,17 @@ proc decode_utf8*(word: EncodedWord): string =
   let data = word.binary_data
   result = convert(data, destEncoding = "UTF-8", srcEncoding = word.charset)
 
-proc decode_encoded_word(match: RegexMatch): string =
-  let word = EncodedWord(
-    charset:  match.captures[0],
-    encoding: parseEnum[EncodedWordEncoding](match.captures[1]),
-    data:     match.captures[2])
-  result = word.decode_utf8
+proc decode_utf8*(word: Word): string =
+  if word.encoded:
+    result = word.word.decode_utf8
+  else:
+    result = word.data
+
+proc decode_utf8*(head: EncodedHeader): string =
+  result = head.mapIt(it.decode_utf8).join("")
 
 proc decode_encoded_words*(data: string): string =
-  result = data.replace(encoded_word, decode_encoded_word)
+  var head: EncodedHeader = @[]
+  if not encoded_header.match(data, head).ok:
+    raise newException(CatchableError, &"syntax error in encoded words {data}")
+  result = head.decode_utf8

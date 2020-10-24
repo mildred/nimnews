@@ -1,4 +1,5 @@
 import asyncnet, net, async, options
+import asynctools/asyncsync
 import ../nntp/protocol
 import ../utils/lineproto
 
@@ -8,6 +9,13 @@ type News* = ref object
   log*: bool
   sock: AsyncSocket
   conn: Client
+  lock*: AsyncLock
+
+proc locked*(news: News) {.async.} =
+  await news.lock.acquire()
+
+proc unlock*(news: News) =
+  news.lock.release()
 
 proc connect(news: News): Future[void] {.async.} =
   if news.conn == nil:

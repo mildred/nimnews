@@ -20,10 +20,12 @@ requires "docopt"
 requires "nuuid"
 requires "scram"
 requires "passgen"
+requires "npeg"
 
 # NewsWeb
 
 requires "nimassets" # dev only
 requires "jester"
 requires "templates"
+requires "asynctools"
 

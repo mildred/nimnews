@@ -3,6 +3,9 @@ import ../../nntp/protocol
 import ../nntp
 
 proc group_list*(nntp: News): Future[Table[string,string]] {.async.} =
+  await nntp.locked()
+  defer: nntp.unlock()
+
   # TODO: read groups with description
   var list: seq[(string,string)] = @[]
   let res = await nntp.request("LIST")

@@ -2,6 +2,7 @@ import strformat, nre, strutils
 import asyncnet, asyncdispatch, net
 import strutils, docopt, options, logging
 import jester
+import asynctools/asyncsync
 import ../utils/parse_port
 import ../nntp/protocol
 import ./nntp
@@ -48,19 +49,33 @@ let
   news = News(
     log:  arg_log,
     address: $args["--nntp"],
-    port: parse_port($args["--nntp-port"], 119))
+    port: parse_port($args["--nntp-port"], 119),
+    lock: newAsyncLock())
 
 import controllers/index
+import controllers/style
 import controllers/group_index
 import controllers/group_thread
 
 proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
-  if request.pathInfo == "/":
-    return await index(request, news)
+  if request.pathInfo == "/style.css":
+    return await style(request, news)
 
-  var m = request.pathInfo.match(re"^/group/([^/]*)/?$")
+  var m = request.pathInfo.match(re"^/group(/(index\.html)?)?$")
   if m.is_some:
-    return await group_index(request, news, m.get.captures[0])
+    return await index(request, news, json = false)
+
+  m = request.pathInfo.match(re"^/group(/(index)?)?\.json$")
+  if m.is_some:
+    return await index(request, news, json = true)
+
+  m = request.pathInfo.match(re"^/group/([^/]*)(/(index\.html)?)?$")
+  if m.is_some:
+    return await group_index(request, news, m.get.captures[0], json = false)
+
+  m = request.pathInfo.match(re"^/group/([^/]*)/index\.json$")
+  if m.is_some:
+    return await group_index(request, news, m.get.captures[0], json = true)
 
   m = request.pathInfo.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)/?$")
   if m.is_some:
@@ -70,9 +85,6 @@ proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
       first = m.get.captures[2].parse_int,
       last = m.get.captures[3].parse_int,
       endnum = m.get.captures[4].parse_int)
-
-  block route:
-    resp Http404, "Not found!"
 
 var server = initJester(match, settings)
 server.serve()

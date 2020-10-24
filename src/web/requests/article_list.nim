@@ -29,6 +29,9 @@ proc request_over(nntp: News, command: string): Future[seq[ArticleOver]] {.async
   return list
 
 proc article_list*(nntp: News, group: string, first, last, endnum: int): Future[seq[ArticleOver]] {.async.} =
+  await nntp.locked()
+  defer: nntp.unlock()
+
   var res = await nntp.request(&"GROUP {group}")
   if res.is_none or res.get.int_code != 211:
     return @[]
@@ -37,6 +40,9 @@ proc article_list*(nntp: News, group: string, first, last, endnum: int): Future[
   result.add(await nntp.request_over(&"OVER {endnum+1}-"))
 
 proc article_list*(nntp: News, group: string): Future[seq[ArticleOver]] {.async.} =
+  await nntp.locked()
+  defer: nntp.unlock()
+
   var res = await nntp.request(&"GROUP {group}")
   if res.is_none or res.get.int_code != 211:
     return @[]
@@ -61,6 +67,9 @@ proc fetch_body(nntp: News, num: int): Future[string] {.async.} =
     return lines.get
 
 proc fetch_body*(nntp: News, articles: seq[ArticleTree]): Future[void] {.async.} =
+  await nntp.locked()
+  defer: nntp.unlock()
+
   for art in articles:
     art.body = await nntp.fetch_body(art.num)
     await nntp.fetch_body(art.children)

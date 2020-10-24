@@ -1,4 +1,4 @@
-import tables, sets, sequtils, strutils, algorithm
+import json, tables, sets, sequtils, strutils, algorithm
 
 type ArticleOver* = ref object
   num*: string
@@ -20,6 +20,16 @@ type ArticleTree* = ref object
   last*:      int
   endnum*:    int
   body*:      string
+
+proc `%`*(o: HashSet[string]): JsonNode =
+  result = newJNull()
+
+proc `%`*(o: ArticleTree): JsonNode =
+  ## Construct JsonNode from tuples and objects.
+  result = newJObject()
+  for k, v in o[].fieldPairs:
+    if k != "references" and k != "parent":
+      result[k] = %v
 
 proc set_parent(article: ArticleTree, parent: ArticleTree) =
   # Remove old parenting

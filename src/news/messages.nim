@@ -1,5 +1,6 @@
 import strformat, strutils, times, tables
 import nuuid
+import ./encoded_words
 
 const CRLF* = "\c\L"
 
@@ -34,6 +35,9 @@ proc parse_headers*(head: string): seq[string] =
       result[len(result)-1].add(CRLF & line)
     else:
       result.add(line)
+
+proc decoded*(s: string): string =
+  return s.decode_encoded_words.strip
 
 proc parse_header*(line: string): Header =
   let parts = line.split(":", 1)
