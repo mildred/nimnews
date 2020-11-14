@@ -46,6 +46,7 @@ proc check_login_pass*(db: Db, mode: AuthMode, smtp: SmtpConfig, login, passwd: 
     users.handle_success(db, smtp, login)
 
 proc register_login*(db: Db, mode: AuthMode, smtp: SmtpConfig, login: string) =
+  discard users.reset_user_pass(db, login)
   users.send_password(db, mode, smtp, login)
 
 proc get_scram_pass(db: Db, login: string): Option[UserData] =

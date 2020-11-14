@@ -28,8 +28,8 @@ proc create_user*(db: Db, email: string) =
 
 proc update_user*(db: Db, email, pass: string) =
   db.conn.exec(sql"""
-  UPDATE users SET email = ?, password = ?
-  """, email, pass)
+  UPDATE users SET password = ? WHERE email = ?
+  """, pass, email)
 
 proc get_user*(db: Db, email: string): Option[User] =
   var u = db.conn.getRow(sql"""
@@ -73,3 +73,15 @@ proc get_user_pass*(db: Db, email: string): string =
     SELECT password FROM users WHERE email = ?
     """, email)
 
+proc reset_user_pass*(db: Db, email: string): string =
+  result = db.conn.getValue(sql"""
+  SELECT password FROM users WHERE email = ?
+  """, email)
+  if result == "":
+    db.create_user(email)
+    result = db.conn.getValue(sql"""
+    SELECT password FROM users WHERE email = ?
+    """, email)
+  else:
+    result = newPassGen(passlen = 24).getPassword()
+    update_user(db, email, result)

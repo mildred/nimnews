@@ -8,6 +8,8 @@ type AuthMode* = enum
   AuthLogin
   AuthRegister
 
+export reset_user_pass
+
 proc get_pass*(db: Db, email: string): string =
   return db.get_user_pass(email)
 
