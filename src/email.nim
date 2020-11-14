@@ -43,6 +43,26 @@ proc send_password*(cfg: SmtpConfig, email, password: string) =
     &"Please do not reply to this automated message",
     @[email]))
 
+proc send_warning*(cfg: SmtpConfig, email, password: string) =
+  cfg.send_email(cfg.sender, email, $createMessage(
+    "Someone tried to connect with your e-mail address to newsgroups",
+    &"Someone, attempted to connect to newsgroups and failed.\n\n" &
+    &"Please do not reply to this automated message",
+    @[email]))
+
+proc send_registration*(cfg: SmtpConfig, email, password: string) =
+  cfg.send_email(cfg.sender, email, $createMessage(
+    "Registration to newsgroups",
+    "Someone, probably you, registred your e-mail address to access newsgroups.\n" &
+    "Here is your login information:\n\n" &
+    &"Your login:    {email}\n" &
+    &"Your password: {password}\n\n" &
+    &"You can also subscribe by e-mail to groups by sending an empty e-mail to\n" &
+    &"subscribe-group.name@{cfg.fqdn} (replace group.name by the group name you\n" &
+    &"want to subscribe to)\n\n" &
+    &"Please do not reply to this automated message",
+    @[email]))
+
 proc send_list_welcome*(cfg: SmtpConfig, rcpt: NameAddress, group_name: string, feed_num: int) =
   cfg.send_email(cfg.sender, $rcpt.address, $createMessage(
     &"You just subscribed to group-{group_name}@{cfg.fqdn}",

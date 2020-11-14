@@ -4,6 +4,8 @@ import ./db
 import ./email
 import ./users
 
+export AuthMode
+
 type
   AuthState* = enum
     AuthAccepted
@@ -24,22 +26,27 @@ type
   AuthSaslPlain* = ref object
     db: Db
     smtp: SmtpConfig
+    mode: AuthMode
 
   AuthSaslScram* = ref object of ScramServer[SHA256Digest]
     db: Db
     smtp: SmtpConfig
     username: string
+    mode: AuthMode
 
   AuthSasl* = proc(challenge: string): AuthResponse
 
-proc check_login_pass*(db: Db, smtp: SmtpConfig, login, passwd: string): bool =
+proc check_login_pass*(db: Db, mode: AuthMode, smtp: SmtpConfig, login, passwd: string): bool =
   let db_pass = users.get_pass(db, login)
   result = db_pass != "" and db_pass == passwd
   if not result:
-    users.send_password(db, smtp, login)
+    users.send_password(db, mode, smtp, login)
     users.handle_failure(db, smtp, login)
   else:
     users.handle_success(db, smtp, login)
+
+proc register_login*(db: Db, mode: AuthMode, smtp: SmtpConfig, login: string) =
+  users.send_password(db, mode, smtp, login)
 
 proc get_scram_pass(db: Db, login: string): Option[UserData] =
   let db_pass = get_pass(db, login)
@@ -52,14 +59,14 @@ proc auth*(auth: AuthSaslPlain, challenge: string): AuthResponse =
   let info = base64.decode(challenge).split('\0', 2)
   case len(info)
   of 2:
-    if check_login_pass(auth.db, auth.smtp, info[0], info[1]):
+    if check_login_pass(auth.db, auth.mode, auth.smtp, info[0], info[1]):
       return AuthResponse(state: AuthAccepted, username: info[0])
     else:
       return AuthResponse(state: AuthFailure, username: info[0])
   of 3:
     if info[0] != info[1]:
       return AuthResponse(state: AuthFailure, username: info[0])
-    elif check_login_pass(auth.db, auth.smtp, info[0], info[2]):
+    elif check_login_pass(auth.db, auth.mode, auth.smtp, info[0], info[2]):
       return AuthResponse(state: AuthAccepted, username: info[0])
     else:
       return AuthResponse(state: AuthFailure, username: info[0])
@@ -86,17 +93,17 @@ proc auth*(auth: AuthSaslScram, challenge: string): AuthResponse =
       users.handle_success(auth.db, auth.smtp, auth.username)
       return AuthResponse(state: AuthAcceptedWithData, response: base64.encode(res), username: auth.username)
     else:
-      users.send_password(auth.db, auth.smtp, auth.username)
+      users.send_password(auth.db, auth.mode, auth.smtp, auth.username)
       users.handle_failure(auth.db, auth.smtp, auth.username)
       return AuthResponse(state: AuthFailureWithData, response: base64.encode(res), username: auth.username)
 
-proc sasl_auth*(db: Db, smtp: SmtpConfig, sasl_method: string): AuthSasl =
+proc sasl_auth*(db: Db, mode: AuthMode, smtp: SmtpConfig, sasl_method: string): AuthSasl =
   case sasl_method.toUpper
   of "PLAIN":
-    let a = AuthSaslPlain(db: db, smtp: smtp)
+    let a = AuthSaslPlain(db: db, smtp: smtp, mode: mode)
     return proc(c: string): AuthResponse = return a.auth(c)
   of "SCRAM":
-    let a = AuthSaslScram(db: db, smtp: smtp)
+    let a = AuthSaslScram(db: db, smtp: smtp, mode: mode)
     return proc(c: string): AuthResponse = return a.auth(c)
   else:
     return nil

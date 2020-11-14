@@ -58,6 +58,7 @@ let
   sessions_list: SessionList[News] = newSessionList[News](defaultSessionTimeout, closeSession)
 
 import controllers/root
+import controllers/register
 import controllers/login
 import controllers/logout
 import controllers/index
@@ -79,6 +80,10 @@ proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
   var m = request.pathInfo.match(re"^/$")
   if m.is_some:
     return await root(request)
+
+  m = request.pathInfo.match(re"^/register$")
+  if m.is_some:
+    return await register(request, sessions_list, anon_news)
 
   m = request.pathInfo.match(re"^/login$")
   if m.is_some:

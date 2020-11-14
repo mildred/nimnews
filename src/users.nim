@@ -3,6 +3,11 @@ import ./db/users
 import ./db
 import ./email
 
+type AuthMode* = enum
+  AuthMixed
+  AuthLogin
+  AuthRegister
+
 proc get_pass*(db: Db, email: string): string =
   return db.get_user_pass(email)
 
@@ -16,7 +21,13 @@ proc handle_success*(db: Db, smtp: SmtpConfig, login: string) =
 proc handle_failure*(db: Db, smtp: SmtpConfig, login: string) =
   discard
 
-proc send_password*(db: Db, smtp: SmtpConfig, login: string) =
+proc send_password*(db: Db, mode: AuthMode, smtp: SmtpConfig, login: string) =
   let pass = get_pass(db, login)
-  smtp.send_password(login, pass)
+  case mode
+  of AuthMixed:
+    smtp.send_password(login, pass)
+  of AuthLogin:
+    smtp.send_warning(login, pass)
+  of AuthRegister:
+    smtp.send_registration(login, pass)
 

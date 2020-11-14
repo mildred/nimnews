@@ -14,6 +14,7 @@ type News* = ref object
   lock*: AsyncLock
   user*: string
   pass*: string
+  register*: bool
   auth: bool
 
 proc locked*(news: News) {.async.} =
@@ -77,6 +78,12 @@ proc write_lines*(news: News, content: string): Future[void] {.async.} =
 
 proc authenticate(news: News): Future[bool] {.async.} =
   let scram = newScramClient[SHA256Digest]()
+
+  if news.register:
+    discard await news.request(&"AUTHINFO X-REGISTER {news.user}")
+    return false
+
+  discard await news.request("AUTHINFO X-LOGIN")
 
   let firstMessage = base64.encode(scram.prepareFirstMessage(news.user))
   let firstResponse = await news.request(&"AUTHINFO SASL SCRAM {firstMessage}")

@@ -8,6 +8,8 @@ import ./auth
 import ./email
 import ./process
 
+export AuthMode
+
 type
   Mode = enum
     ModeInitial
@@ -25,6 +27,7 @@ type
     auth_sasl:       AuthSasl
     can_starttls:    bool
     admin:           bool
+    auth_mode:       AuthMode
 
 proc create*(fqdn: string, secure: bool, starttls: bool, smtp: SmtpConfig, admin: bool): CxState =
   return CxState(fqdn: fqdn, mode: ModeInitial, secure: secure, can_starttls: starttls, smtp: smtp, admin: admin)
@@ -64,10 +67,10 @@ proc processCapabilities(cx: CxState, cmd: Command, db: DbConn): Response =
     capabilities.add("STARTTLS")
   if not cx.auth:
     if cx.secure:
-      capabilities.add("AUTHINFO USER SASL")
+      capabilities.add("AUTHINFO USER SASL X-LOGIN X-REGISTER")
       capabilities.add("SASL SCRAM-SHA-256 PLAIN")
     else:
-      capabilities.add("AUTHINFO SASL")
+      capabilities.add("AUTHINFO SASL X-LOGIN X-REGISTER")
       capabilities.add("SASL SCRAM-SHA-256")
 
   return Response(code: "101", text: "Capability list follows", content: some(capabilities.join(CRLF)))
@@ -86,6 +89,12 @@ proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     return Response(code: "502", text: "command unavailable, already authenticated")
 
   case args[0].toUpper
+  of "X-LOGIN":
+    cx.auth_mode = AuthLogin
+    return Response(code: "381", text: "Continue with login attempt")
+  of "X-REGISTER":
+    register_login(db, AuthRegister, cx.smtp, args[1])
+    return Response(code: "381", text: "Registration in progress")
   of "USER":
     if not cx.secure:
       return Response(code: "483", text: "channel not secure, encryption required, cannot proceed")
@@ -98,7 +107,7 @@ proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     elif cx.auth_user == "":
       return Response(code: "482", text: "authentication commands issued out of sequence")
     else:
-      if check_login_pass(db, cx.smtp, cx.auth_user, args[1]):
+      if check_login_pass(db, cx.auth_mode, cx.smtp, cx.auth_user, args[1]):
         cx.auth = true
         return Response(code: "281", text: "authentication succeeded")
       else:
@@ -110,7 +119,7 @@ proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     if len(args) < 2:
       return Response(code: "500", text: "command not recognized")
     if cx.auth_sasl == nil:
-      cx.auth_sasl = sasl_auth(db, cx.smtp, args[1])
+      cx.auth_sasl = sasl_auth(db, cx.auth_mode, cx.smtp, args[1])
     if cx.auth_sasl == nil:
       return Response(code: "482", text: "authentication protocol error, mechanism not supported")
     let response = cx.auth_sasl(if data.isSome: data.get else: args[2])

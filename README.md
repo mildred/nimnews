@@ -230,6 +230,32 @@ Responses:
 - `480` Disallowed unless the user is administrator
 
 
+AUTHINFO X-LOGIN
+----------------
+
+Syntax: `AUTHINFO X-LOGIN`
+
+Tells the server that this is a login attempt with valid credentials.
+Credentials should not be reset upon authentication failure. This should be
+followed by another `AUTHINFO` command.
+
+Responses:
+
+- `381` Continue with login attempt
+
+AUTHINFO X-REGISTER
+-------------------
+
+Syntax: `AUTHINFO X-REGISTER <email>`
+
+Tells the server that this is a register/recovery attempt for the given e-mail
+address. Credentials should be sent to this address for future login.
+
+Responses:
+
+- `381` Registration in progress
+
+
 [RFC-821]: https://tools.ietf.org/html/rfc821
 [RFC-822]: https://tools.ietf.org/html/rfc822
 [RFC-850]: https://tools.ietf.org/html/rfc850
