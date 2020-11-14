@@ -4,7 +4,7 @@ import ../data/article
 import ./name_address
 
 proc article_list_children(root: ArticleTree, include_root: bool, link: string): string = tmpli html"""
-  <p id="article-num-$(root.article.num)">
+  <p id="article-num-$(root.article.num)" data-message-id="$(root.article.message_id)" data-num="$(root.article.num)">
     <a href="$link#article-num-$(root.article.num)">$(root.article.subject)</a>
     <em>by $(name_address(root.article.from_h)) ($(root.article.date))</em>
   </p>

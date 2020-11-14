@@ -28,4 +28,13 @@ proc style*(): string = """
     flex: 1 0 auto;
   }
 
+  #login-form:not(:target), #register-form:not(:target), form#post:not(:target) {
+    display: none;
+  }
+
+  #login-form > *, #register-form > *, form#post > *, form.reply-post > * {
+    display: block;
+    width: 100%;
+  }
+
   """

@@ -9,27 +9,31 @@ proc layout*(main, nav, title, login: string): string = tmpli html"""
     <body>
       <div class="content">
         <div class="main">$main</div>
-        $if nav != "" {
-          <nav>$nav</nav>
-        }
-      </div>
-      <div class="login">
-        $if login == "" {
-          <form action="/login">
-            <input type="text" placeholder="email" name="email" />
-            <input type="password" placeholder="password" name="pass" />
-            <input type="submit" value="Log-In" />
-          </form>
-          <form action="/register">
-            <input type="text" placeholder="email" name="email" />
-            <input type="submit" value="Register" />
-          </form>
-        }
-        $if login != "" {
-          <form action="/logout">
-            <input type="submit" value="Log-Out" />
-          </form>
-        }
+        <nav>
+          <div class="login">
+            $if login == "" {
+              <a href="#login-form">Log-In</a>
+              <a href="#register-form">Register</a>
+              <form id="login-form" action="/login">
+                <input type="text" placeholder="email" name="email" />
+                <input type="password" placeholder="password" name="pass" />
+                <input type="submit" value="Log-In" />
+                <a href="#">Cancel</a>
+              </form>
+              <form id="register-form" action="/register">
+                <input type="text" placeholder="email" name="email" />
+                <input type="submit" value="Register" />
+                <a href="#">Cancel</a>
+              </form>
+            }
+            $if login != "" {
+              <a href="/logout">Log-Out</a>
+            }
+          </div>
+          $if nav != "" {
+            <div>$nav</div>
+          }
+        </nav>
       </div>
     </body>
   </html>

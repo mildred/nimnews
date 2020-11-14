@@ -26,6 +26,7 @@ proc group_index*(req: Request, sess: Session[News], news: News, group: string, 
         login = news.authenticated_user,
         nav = group_list(list),
         main = group_index(
+          post_form  = sess.data.authenticated,
           group      = group,
           articles   = article_list(group, roots)))
 

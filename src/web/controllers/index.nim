@@ -18,6 +18,6 @@ proc index*(req: Request, sess: Session[News], news: News, json: bool = false): 
       resp layout(
         title = "Groups",
         login = news.authenticated_user,
-        nav = "",
-        main = group_list(list))
+        nav = group_list(list),
+        main = "")
 

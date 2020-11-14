@@ -64,6 +64,7 @@ import controllers/logout
 import controllers/index
 import controllers/style
 import controllers/group_index
+import controllers/group_post
 import controllers/group_thread
 
 proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
@@ -103,7 +104,10 @@ proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
 
   m = request.pathInfo.match(re"^/group/([^/]*)(/(index\.html)?)?$")
   if m.is_some:
-    return await group_index(request, sess, news, m.get.captures[0], json = false)
+    if request.reqMethod == HttpPost:
+      return await group_post(request, sess, m.get.captures[0])
+    else:
+      return await group_index(request, sess, news, m.get.captures[0], json = false)
 
   m = request.pathInfo.match(re"^/group/([^/]*)/index\.json$")
   if m.is_some:
@@ -116,7 +120,18 @@ proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
       num = m.get.captures[1].parse_int,
       first = m.get.captures[2].parse_int,
       last = m.get.captures[3].parse_int,
-      endnum = m.get.captures[4].parse_int)
+      endnum = m.get.captures[4].parse_int,
+      json = false)
+
+  m = request.pathInfo.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(/index)?\.json?$")
+  if m.is_some:
+    return await group_thread(request, sess, news,
+      group = m.get.captures[0],
+      num = m.get.captures[1].parse_int,
+      first = m.get.captures[2].parse_int,
+      last = m.get.captures[3].parse_int,
+      endnum = m.get.captures[4].parse_int,
+      json = true)
 
 var server = initJester(match, settings)
 server.serve()
