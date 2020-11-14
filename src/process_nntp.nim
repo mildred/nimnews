@@ -112,7 +112,7 @@ proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
     if cx.auth_sasl == nil:
       cx.auth_sasl = sasl_auth(db, cx.smtp, args[1])
     if cx.auth_sasl == nil:
-      return Response(code: "482", text: "authentication protocol error")
+      return Response(code: "482", text: "authentication protocol error, mechanism not supported")
     let response = cx.auth_sasl(if data.isSome: data.get else: args[2])
     case response.state
     of AuthAccepted:

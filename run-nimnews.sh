@@ -9,4 +9,4 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 
 set -x
-src/nimnews --log "${args[@]}" --fqdn $fqdn --cert "$fqdn.crt" --skey "$fqdn.key" --smtp localhost --smtp-port 2525 "$@"
+src/nimnews --log "${args[@]}" --fqdn $fqdn --cert "$fqdn.crt" --skey "$fqdn.key" --smtp localhost --smtp-port 2525 --smtp-debug "$@"

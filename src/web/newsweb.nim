@@ -6,6 +6,7 @@ import asynctools/asyncsync
 import ../utils/parse_port
 import ../nntp/protocol
 import ./nntp
+import ./session
 
 const version {.strdefine.}: string = "(no version information)"
 
@@ -40,46 +41,72 @@ if args["--version"]:
   else:
     quit(1)
 
+proc closeSession(session: Session[News]) =
+  session.data.close()
+
 let
   arg_log  = args["--log"]
   settings = newSettings(
     port = parse_port($args["--port"], def = 8080),
     bindAddr = $args["--bind"],
     staticDir = $args["--assets"])
-  news = News(
+  anon_news = News(
     log:  arg_log,
     address: $args["--nntp"],
     port: parse_port($args["--nntp-port"], 119),
     lock: newAsyncLock())
+  sessions_list: SessionList[News] = newSessionList[News](defaultSessionTimeout, closeSession)
 
+import controllers/root
+import controllers/login
+import controllers/logout
 import controllers/index
 import controllers/style
 import controllers/group_index
 import controllers/group_thread
 
 proc match(request: Request): Future[ResponseData] {.async gcsafe.} =
+  var sess: Session[News] = sessions_list.checkSession(request)
+  if sess == nil:
+    sess = Session[News](
+      data: anon_news)
+
+  let news = sess.data
+
   if request.pathInfo == "/style.css":
     return await style(request, news)
 
-  var m = request.pathInfo.match(re"^/group(/(index\.html)?)?$")
+  var m = request.pathInfo.match(re"^/$")
   if m.is_some:
-    return await index(request, news, json = false)
+    return await root(request)
+
+  m = request.pathInfo.match(re"^/login$")
+  if m.is_some:
+    return await login(request, sessions_list, anon_news)
+
+  m = request.pathInfo.match(re"^/logout$")
+  if m.is_some:
+    return await logout(request, sessions_list)
+
+  m = request.pathInfo.match(re"^/group(/(index\.html)?)?$")
+  if m.is_some:
+    return await index(request, sess, news, json = false)
 
   m = request.pathInfo.match(re"^/group(/(index)?)?\.json$")
   if m.is_some:
-    return await index(request, news, json = true)
+    return await index(request, sess, news, json = true)
 
   m = request.pathInfo.match(re"^/group/([^/]*)(/(index\.html)?)?$")
   if m.is_some:
-    return await group_index(request, news, m.get.captures[0], json = false)
+    return await group_index(request, sess, news, m.get.captures[0], json = false)
 
   m = request.pathInfo.match(re"^/group/([^/]*)/index\.json$")
   if m.is_some:
-    return await group_index(request, news, m.get.captures[0], json = true)
+    return await group_index(request, sess, news, m.get.captures[0], json = true)
 
   m = request.pathInfo.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)/?$")
   if m.is_some:
-    return await group_thread(request, news,
+    return await group_thread(request, sess, news,
       group = m.get.captures[0],
       num = m.get.captures[1].parse_int,
       first = m.get.captures[2].parse_int,

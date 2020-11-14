@@ -8,8 +8,9 @@ import ../views/layout
 import ../requests/group_list as group_list_request
 import ../requests/article_list as article_list_request
 import ../data/article
+import ../session
 
-proc group_index*(req: Request, news: News, group: string, json: bool): Future[ResponseData] {.async.} =
+proc group_index*(req: Request, sess: Session[News], news: News, group: string, json: bool): Future[ResponseData] {.async.} =
   block route:
     let arts = await news.article_list(group)
     let roots = make_tree(arts)
@@ -22,6 +23,7 @@ proc group_index*(req: Request, news: News, group: string, json: bool): Future[R
       let list = await news.group_list()
       resp layout(
         title = group,
+        login = news.authenticated_user,
         nav = group_list(list),
         main = group_index(
           group      = group,

@@ -144,6 +144,16 @@ NewsWeb web interface
 This package also contains the newsweb web interface that is a forum interface
 for the Web designed to work with nimnews.
 
+Build
+-----
+
+    nim c -d:ssl src/web/newsweb
+
+Run
+---
+
+    ./run-newsweb.sh
+
 X-NIMNEWS Extension
 ===================
 

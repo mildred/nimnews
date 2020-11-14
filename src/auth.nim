@@ -79,7 +79,7 @@ proc auth*(auth: AuthSaslScram, challenge: string): AuthResponse =
       let res = auth.prepareFirstMessage(pass.get)
       return AuthResponse(state: AuthContinue, response: base64.encode(res), username: auth.username)
   else:
-    let res = auth.prepareFinalMessage(challenge)
+    let res = auth.prepareFinalMessage(info)
     if not auth.isEnded:
       return AuthResponse(state: AuthError, username: auth.username)
     if auth.isSuccessful:

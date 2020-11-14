@@ -9,8 +9,9 @@ import ../requests/group_list as group_list_request
 import ../requests/article_list as article_list_request
 import ../data/article
 import ../../news/messages
+import ../session
 
-proc group_thread*(req: Request, news: News, group: string, num, first, last, endnum: int): Future[ResponseData] {.async.} =
+proc group_thread*(req: Request, sess: Session[News], news: News, group: string, num, first, last, endnum: int): Future[ResponseData] {.async.} =
   let list = await news.group_list()
   let arts = await news.article_list(group, first, last, endnum)
   let roots = make_tree(arts).filterIt(it.num == num)
@@ -19,6 +20,7 @@ proc group_thread*(req: Request, news: News, group: string, num, first, last, en
   block route:
     resp layout(
       title = subject,
+      login = news.authenticated_user,
       nav = group_list(list),
       main = group_index(
         group      = group,
