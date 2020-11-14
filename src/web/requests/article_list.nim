@@ -66,10 +66,12 @@ proc fetch_body(nntp: News, num: int): Future[string] {.async.} =
   else:
     return lines.get
 
+proc fetch_body_unlocked(nntp: News, articles: seq[ArticleTree]): Future[void] {.async.} =
+  for art in articles:
+    art.body = await nntp.fetch_body(art.num)
+    await nntp.fetch_body_unlocked(art.children)
+
 proc fetch_body*(nntp: News, articles: seq[ArticleTree]): Future[void] {.async.} =
   await nntp.locked()
   defer: nntp.unlock()
-
-  for art in articles:
-    art.body = await nntp.fetch_body(art.num)
-    await nntp.fetch_body(art.children)
+  await fetch_body_unlocked(nntp, articles)
