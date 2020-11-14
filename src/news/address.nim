@@ -49,31 +49,47 @@ proc parse_name_address*(a: string): seq[NameAddress] =
   while i < a.len:
     var lt = a.find('<', start = i)
     var cm = a.find(',', start = i)
+
     if lt != -1 and (cm == -1 or lt < cm):
+      # Found '<' before ','
       var name = a[i..(lt-1)]
       var gt = a.find('>', start = lt + 1)
       if gt == -1 and cm != -1:
+        # '>' not found but ',' found
         result.add(NameAddress(
           name: none(string),
           address: parse_address(a[i..(cm-1)].strip)))
         i = cm + 1
       elif gt == -1:
+        # Neither '>' nor ',' found
         result.add(NameAddress(
           name: none(string),
           address: parse_address(a[i..^1].strip)))
         i = a.len
       else:
+        # '>' found
         result.add(NameAddress(
           name: some name.strip,
           address: parse_address(a[(lt+1)..(gt-1)].strip)))
         i = gt + 1
+
     elif cm != -1 and (lt == -1 or cm < lt):
+      # Found ',' before '<'
       let str = a[i..(cm-1)].strip
       if str != "":
         result.add(NameAddress(
           name: none(string),
           address: parse_address(str)))
       i = cm + 1
+
+    elif cm == -1 and lt == -1:
+      # Found neither ',' nor ','
+      let str = a[i..^1].strip
+      if str != "":
+        result.add(NameAddress(
+          name: none(string),
+          address: parse_address(str)))
+      i = a.len
 
 proc contains_email*(na: seq[NameAddress], email: string): bool =
   for addr in na:
