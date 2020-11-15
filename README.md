@@ -95,7 +95,7 @@ Build
 -----
 
     nimble install -d
-    nim c -d:ssl src/nimnews
+    nim c -d:ssl nimnewspkg/nimnews
 
 You can omit `-d:ssl` if you don't want to compile with STARTTLS support (not
 well tested, might break).
@@ -147,7 +147,7 @@ for the Web designed to work with nimnews.
 Build
 -----
 
-    nim c -d:ssl src/web/newsweb
+    nim c -d:ssl nimnewspkg/web/newsweb
 
 Run
 ---

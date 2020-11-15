@@ -1,6 +1,5 @@
 import asyncnet, net, async, options, strformat, base64
 import asynctools/asyncsync
-import passgen
 import scram/client
 import ../nntp/protocol
 import ../utils/lineproto

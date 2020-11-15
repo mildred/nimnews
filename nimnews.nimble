@@ -4,7 +4,6 @@ version       = "0.1.0"
 author        = "Mildred Ki'Lya"
 description   = "Nim newsgroup NNTP server"
 license       = "GPL-3.0"
-srcDir        = "src"
 installExt    = @["nim"]
 bin           = @["nimnews", "newsweb/newsweb"]
 
