@@ -11,8 +11,14 @@ proc login*(req: Request, sessions: SessionList, anon_news: News): Future[Respon
   block route:
     if session.data.authenticated():
       setCookie("sid", session.sid)
-      redirect("/?login=1")
+      if req.headers.has_key("referer"):
+        redirect(req.headers["referer"])
+      else:
+        redirect("/?login=1")
     else:
       discard sessions.deleteSession(session.sid)
-      redirect("/?login=0")
+      if req.headers.has_key("referer"):
+        redirect(req.headers["referer"])
+      else:
+        redirect("/?login=0")
 

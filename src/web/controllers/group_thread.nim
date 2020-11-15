@@ -4,7 +4,7 @@ import jester
 import ../nntp
 import ../views/group_list
 import ../views/group_index
-import ../views/thread
+import ../views/article_thread
 import ../views/layout
 import ../requests/group_list as group_list_request
 import ../requests/article_list as article_list_request

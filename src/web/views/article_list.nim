@@ -11,7 +11,7 @@ proc article_list_children(root: ArticleTree, include_root: bool, link: string):
   $if root.children.len > 0 {
     $if root.children.len > 1 {
       <ul>
-        $for child in root.children.reversed {
+        $for child in root.children[1..^1].reversed {
           <li>
             $(article_list_children(child, true, link))
             <hr/>

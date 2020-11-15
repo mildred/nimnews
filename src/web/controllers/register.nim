@@ -10,5 +10,8 @@ proc register*(req: Request, sessions: SessionList, anon_news: News): Future[Res
   await session.data.connect()
   discard sessions.deleteSession(session.sid)
   block route:
-    redirect("/")
+    if req.headers.has_key("referer"):
+      redirect(req.headers["referer"])
+    else:
+      redirect("/")
 
