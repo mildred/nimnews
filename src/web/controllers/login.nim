@@ -9,6 +9,9 @@ proc login*(req: Request, sessions: SessionList, anon_news: News): Future[Respon
   session.data.pass = req.params.getOrDefault("pass", "")
   await session.data.connect()
   block route:
+    let from_name = req.params.getOrDefault("from_name", "")
+    if from_name != "":
+      setCookie("from_name", from_name)
     if session.data.authenticated():
       setCookie("sid", session.sid)
       if req.headers.has_key("referer"):

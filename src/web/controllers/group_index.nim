@@ -20,13 +20,16 @@ proc group_index*(req: Request, sess: Session[News], news: News, group: string, 
         jroots.add(%root)
       resp %{"threads": jroots}
     else:
+      let from_name = req.cookies.getOrDefault("from_name", "")
       let list = await news.group_list()
       resp layout(
         title = group,
+        from_name = from_name,
         login = news.authenticated_user,
         nav = group_list(list),
         main = group_index(
           post_form  = sess.data.authenticated,
           group      = group,
+          from_name  = from_name,
           articles   = article_list(group, roots)))
 

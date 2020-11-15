@@ -12,9 +12,9 @@ proc article_list_children(root: ArticleTree, include_root: bool, link: string):
     $if root.children.len > 1 {
       <ul>
         $for child in root.children[1..^1].reversed {
-          <li>
+          <li class="thread">
             $(article_list_children(child, true, link))
-            <hr/>
+            <hr class="article-separation"/>
           </li>
         }
       </ul>
@@ -27,9 +27,9 @@ proc article_list*(group: string, articles: seq[ArticleTree]): string = tmpli ht
   <div class="article-list">
     <ul>
       $for art in articles {
-        <li>
+        <li class="thread">
           $(article_list_children(art, true, &"/group/{group}/thread/{art.num}-{art.first}-{art.last}-{art.endnum}"))
-          <hr/>
+          <hr class="article-separation"/>
         </li>
       }
     </ul>

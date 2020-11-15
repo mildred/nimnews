@@ -1,6 +1,6 @@
 import templates
 
-proc layout*(main, nav, title, login: string): string = tmpli html"""
+proc layout*(main, nav, title, login, from_name: string): string = tmpli html"""
   <html>
     <head>
       <link rel=stylesheet href="/style.css" />
@@ -17,6 +17,9 @@ proc layout*(main, nav, title, login: string): string = tmpli html"""
               <form id="login-form" action="/login">
                 <input type="text" placeholder="email" name="email" />
                 <input type="password" placeholder="password" name="pass" />
+                $if from_name == "" {
+                  <input name="from_name" type="text" placeholder="Your name (optional)" value="$from_name" />
+                }
                 <input type="submit" value="Log-In" />
                 <a href="#">Cancel</a>
               </form>

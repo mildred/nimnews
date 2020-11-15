@@ -15,8 +15,10 @@ proc index*(req: Request, sess: Session[News], news: News, json: bool = false): 
         res.add(%{"name": %name, "description": %descr})
       resp res
     else:
+      let from_name = req.cookies.getOrDefault("from_name", "")
       resp layout(
         title = "Groups",
+        from_name = from_name,
         login = news.authenticated_user,
         nav = group_list(list),
         main = "")
