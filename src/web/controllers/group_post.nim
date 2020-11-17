@@ -1,37 +1,28 @@
 import times
 import strformat
 import json
-import jester
+import prologue
 import ../../news/messages
 import ../nntp
-import ../views/group_list
-import ../views/group_index
-import ../views/article_list
-import ../views/layout
-import ../requests/group_list as group_list_request
-import ../requests/article_list as article_list_request
 import ../requests/article_post as article_post_request
-import ../data/article
 import ../session
 
 const CRLF* = "\c\L"
 
-proc group_post*(req: Request, sess: Session[News], group: string): Future[ResponseData] {.async.} =
+proc group_post*(ctx: Context, sess: session.Session[News], group: string): Future[void] {.async.} =
   block route:
     if not sess.data.authenticated:
-      redirect(&"/group/{group}/?post=0")
+      resp redirect(&"/group/{group}/?post=0")
       return
-    let from_name = req.params.getOrDefault("from_name", "")
-    if from_name != "":
-      setCookie("from_name", from_name)
+    let from_name = ctx.getFormParams("from_name", "")
     let from_email = sess.data.user
     let from_full = if from_name == "": from_email else: &"{from_name} <{from_email}>"
     let date = serialize_date(now())
-    let redirect_path = req.params.getOrDefault("redirect", &"/group/{group}/")
-    let redirect_failed_path = req.params.getOrDefault("redirect_failed", &"{redirect_path}?post=0")
-    let subject = req.params["subject"]
-    let references = req.params.getOrDefault("references", "")
-    let body = req.params["body"]
+    let redirect_path = ctx.getFormParams("redirect", &"/group/{group}/")
+    let redirect_failed_path = ctx.getFormParams("redirect_failed", &"{redirect_path}?post=0")
+    let subject = ctx.getFormParams("subject", "")
+    let references = ctx.getFormParams("references", "")
+    let body = ctx.getFormParams("body", "")
     var article = "" &
       &"From: {from_full}{CRLF}" &
       &"Subject: {subject}{CRLF}" &
@@ -43,6 +34,8 @@ proc group_post*(req: Request, sess: Session[News], group: string): Future[Respo
       &"{body}"
     let res = await sess.data.article_post(group, article)
     if res:
-      redirect(redirect_path)
+      resp redirect(redirect_path)
     else:
-      redirect(redirect_failed_path)
+      resp redirect(redirect_failed_path)
+    if from_name != "":
+      ctx.setCookie("from_name", from_name)

@@ -25,7 +25,7 @@ requires "npeg"
 # NewsWeb
 
 requires "nimassets" # dev only
-requires "jester"
+requires "prologue"
 requires "templates"
 requires "asynctools"
 

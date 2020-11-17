@@ -1,7 +1,9 @@
-import jester
+import prologue
 import ../nntp
 import ../views/style
 
-proc style*(req: Request, news: News): Future[ResponseData] {.async.} =
-  block route:
-    resp style(), contentType = "text/css"
+proc style*(ctx: Context, news: News): Future[void] {.async.} =
+  await ctx.respond(
+    body = style(),
+    code = Http200,
+    headers = {"Content-Type": "text/css; charset=UTF-8"}.initResponseHeaders)

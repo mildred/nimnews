@@ -1,6 +1,5 @@
 import tables
 import templates
-import ./layout
 
 proc group_index*(group, from_name, articles: string, post_form: bool): string = tmpli html"""
   <h1>$group</h1>

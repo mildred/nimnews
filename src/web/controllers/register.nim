@@ -1,17 +1,18 @@
-import jester
+import strutils
+import prologue
 import ../nntp
 import ../session
 
-proc register*(req: Request, sessions: SessionList, anon_news: News): Future[ResponseData] {.async.} =
+proc register*(ctx: Context, sessions: SessionList, anon_news: News): Future[void] {.async.} =
   let session = sessions.createSession()
   session.data = anon_news.clone()
-  session.data.user = req.params.getOrDefault("email", "")
+  session.data.user = ctx.getPostParams("email", ctx.getQueryParams("email", ""))
   session.data.register = true
   await session.data.connect()
   discard sessions.deleteSession(session.sid)
-  block route:
-    if req.headers.has_key("referer"):
-      redirect(req.headers["referer"])
-    else:
-      redirect("/")
+  let referer = ctx.request.getHeaderOrDefault("referer").join
+  if referer != "":
+    resp redirect(referer)
+  else:
+    resp redirect("/")
 

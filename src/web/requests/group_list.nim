@@ -1,4 +1,4 @@
-import asyncnet, tables, async, options, strutils
+import tables, async, options, strutils
 import ../../nntp/protocol
 import ../nntp
 

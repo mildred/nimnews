@@ -1,11 +1,12 @@
-import jester
+import strutils
+import prologue
 import ../session
 
-proc logout*(req: Request, sessions: SessionList): Future[ResponseData] {.async.} =
-  discard sessions.destroySession(req)
-  block route:
-    if req.headers.has_key("referer"):
-      redirect(req.headers["referer"])
-    else:
-      redirect("/")
+proc logout*(ctx: Context, sessions: SessionList): Future[void] {.async.} =
+  discard sessions.destroySession(ctx.request)
+  let referer = ctx.request.getHeaderOrDefault("referer").join
+  if referer != "":
+    resp redirect(referer)
+  else:
+    resp redirect("/")
 

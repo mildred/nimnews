@@ -2,7 +2,7 @@ import times
 import std/monotimes
 import tables
 import passgen
-import jester
+import prologue
 
 type
   Session*[T] = ref object
@@ -51,17 +51,11 @@ proc newSession*[T](list: SessionList[T], sid: string): Session[T] =
   return list.list.mgetOrPut(sid, session)
 
 proc checkSession*[T](list: SessionList[T], req: Request): Session[T] =
-  if not req.cookies.hasKey("sid"):
-    return nil
-
-  let sid = req.cookies["sid"]
+  let sid = req.getCookie("sid", "")
   return findSession(list, sid)
 
 proc destroySession*[T](list: SessionList[T], req: Request): Session[T] =
-  if not req.cookies.hasKey("sid"):
-    return nil
-
-  let sid = req.cookies["sid"]
+  let sid = req.getCookie("sid", "")
   return deleteSession(list, sid)
 
 proc createSession*[T](list: SessionList[T]): Session[T] =

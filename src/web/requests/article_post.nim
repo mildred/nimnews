@@ -1,7 +1,6 @@
-import asyncnet, tables, async, options, strutils, strformat
+import tables, async, options, strutils, strformat
 import ../../nntp/protocol
 import ../nntp
-import ../data/article
 
 proc article_post*(nntp: News, group: string, article: string): Future[bool] {.async.} =
   await nntp.locked()

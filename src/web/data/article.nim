@@ -78,7 +78,7 @@ proc make_tree*(all_articles: seq[ArticleOver]): seq[ArticleTree] =
       references: art.references.toHashSet,
       num:        parse_int(art.num))
     if tree.num > endnum: endnum = tree.num
-    articles.add(art.message_id, tree)
+    articles[art.message_id] = tree
 
   # Give a parent to each object
   # Iterate until we stop finding new parents

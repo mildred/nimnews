@@ -1,4 +1,4 @@
-import asyncnet, tables, async, options, strutils, strformat
+import tables, async, options, strutils, strformat
 import ../../nntp/protocol
 import ../nntp
 import ../data/article
@@ -52,7 +52,7 @@ proc article_list*(nntp: News, group: string): Future[seq[ArticleOver]] {.async.
     return @[]
 
   let first = parts[1]
-  let last = parts[2]
+  #let last = parts[2]
   return await nntp.request_over(&"OVER {first}-")
 
 proc fetch_body(nntp: News, num: int): Future[string] {.async.} =

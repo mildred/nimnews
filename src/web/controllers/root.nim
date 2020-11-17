@@ -1,6 +1,5 @@
-import jester
+import prologue
 
-proc root*(req: Request): Future[ResponseData] {.async.} =
-  block route:
-    redirect("/group/")
+proc root*(ctx: Context): Future[void] {.async.} =
+  resp redirect("/group/")
 
