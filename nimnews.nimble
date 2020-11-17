@@ -6,7 +6,7 @@ description   = "Nim newsgroup NNTP server"
 license       = "GPL-3.0"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["nimnews", "newsweb/newsweb"]
+bin           = @["nimnews", "web/newsweb"]
 
 
 
