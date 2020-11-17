@@ -31,9 +31,9 @@ proc clone*(news: News): News =
     user:    news.user,
     pass:    news.pass)
 
-proc authenticate(news: News): Future[bool] {.async.};
+proc authenticate(news: News): Future[bool] {.async gcsafe.};
 
-proc connect*(news: News): Future[void] {.async.} =
+proc connect*(news: News): Future[void] {.async gcsafe.} =
   if news.conn == nil:
     news.sock = await asyncnet.dial(
       address = news.address,
@@ -45,37 +45,37 @@ proc connect*(news: News): Future[void] {.async.} =
     if news.user != "" or news.pass != "":
       news.auth = await authenticate(news)
 
-proc close*(news: News) =
+proc close*(news: News) {.gcsafe.} =
   news.sock.close()
   news.sock = nil
   news.conn = nil
 
-proc disconnect(news: News): Future[void] {.async.} =
+proc disconnect(news: News): Future[void] {.async gcsafe.} =
   news.close()
 
-proc read_response*(news: News): Future[Option[ClientResponse]] {.async.} =
+proc read_response*(news: News): Future[Option[ClientResponse]] {.async gcsafe.} =
   await news.connect()
   result = await news.conn.read_response()
   if result.is_none:
     await news.disconnect()
 
-proc request*(news: News, req: string): Future[Option[ClientResponse]] {.async.} =
+proc request*(news: News, req: string): Future[Option[ClientResponse]] {.async gcsafe.} =
   await news.connect()
   result = await news.conn.request(req)
   if result.is_none:
     await news.disconnect()
 
-proc read_lines*(news: News, single_line: bool = false): Future[Option[string]] {.async.} =
+proc read_lines*(news: News, single_line: bool = false): Future[Option[string]] {.async gcsafe.} =
   await news.connect()
   result = await news.conn.read_lines(single_line)
   if result.is_none:
     await news.disconnect()
 
-proc write_lines*(news: News, content: string): Future[void] {.async.} =
+proc write_lines*(news: News, content: string): Future[void] {.async gcsafe.} =
   await news.connect()
   await news.conn.write_lines(content)
 
-proc authenticate(news: News): Future[bool] {.async.} =
+proc authenticate(news: News): Future[bool] {.async gcsafe.} =
   let scram = newScramClient[SHA256Digest]()
 
   if news.register:

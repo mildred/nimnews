@@ -33,7 +33,7 @@ type
 
   EncodedHeader* = seq[Word]
 
-let encoded_header = peg("enc_head", h: EncodedHeader):
+const encoded_header = peg("enc_head", h: EncodedHeader):
   part     <- +( 1 - {' ', '\t', '\n', '\r', '?'})
   encoding <- {'Q', 'B'}
   enc_word <- "=?" * >part * "?" * >encoding * "?" * >part * "?=":
@@ -52,7 +52,7 @@ let encoded_header = peg("enc_head", h: EncodedHeader):
     if ($1).len > 0: h.add(Word(offset: @0, encoded: false, data: $1))
   enc_head <- *( not_enc * enc_word ) * not_enc * stop
 
-let qdata = peg("data", res: string):
+const qdata = peg("data", res: string):
   hex        <- {'a'..'f'} | {'A'..'F'} | {'0'..'9'}
   enc_byte   <- '=' * >(hex * hex):
     res = res & parseHexStr($1)
@@ -62,7 +62,7 @@ let qdata = peg("data", res: string):
     res = res & $1
   data       <- *( enc_byte | underscore | char )
 
-proc binary_data*(word: EncodedWord): string =
+proc binary_data*(word: EncodedWord): string {.gcsafe.} =
   case word.encoding
   of QEncode:
     result = ""
@@ -71,20 +71,20 @@ proc binary_data*(word: EncodedWord): string =
   of Base64:
     result = base64.decode(word.data)
 
-proc decode_utf8*(word: EncodedWord): string =
+proc decode_utf8*(word: EncodedWord): string {.gcsafe.} =
   let data = word.binary_data
   result = convert(data, destEncoding = "UTF-8", srcEncoding = word.charset)
 
-proc decode_utf8*(word: Word): string =
+proc decode_utf8*(word: Word): string {.gcsafe.} =
   if word.encoded:
     result = word.word.decode_utf8
   else:
     result = word.data
 
-proc decode_utf8*(head: EncodedHeader): string =
+proc decode_utf8*(head: EncodedHeader): string {.gcsafe.} =
   result = head.mapIt(it.decode_utf8).join("")
 
-proc decode_encoded_words*(data: string): string =
+proc decode_encoded_words*(data: string): string {.gcsafe.} =
   var head: EncodedHeader = @[]
   if not encoded_header.match(data, head).ok:
     raise newException(CatchableError, &"syntax error in encoded words {data}")

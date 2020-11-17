@@ -13,11 +13,11 @@ type
   SessionList*[T] = ref object
     timeout: Duration
     list: Table[string,Session[T]]
-    close: proc(session: Session[T]) {.closure.}
+    close: proc(session: Session[T]) {.closure gcsafe.}
 
 let defaultSessionTimeout*: Duration = initDuration(hours = 6)
 
-func newSessionList*[T](timeout: Duration, close: proc(session: Session[T]) {.closure.}): SessionList[T] =
+func newSessionList*[T](timeout: Duration, close: proc(session: Session[T]) {.closure gcsafe.}): SessionList[T] =
   return SessionList[T](
     timeout: timeout,
     list: initTable[string,Session[T]](),

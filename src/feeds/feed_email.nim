@@ -88,7 +88,7 @@ proc set_article_list_headers(article: Article, from_email: bool, article_id: in
   result.head = result.head & &"X-NimNews-Feed-Group: {group}{CRLF}"
   result.head = result.head & &"X-NimNews-Reason: {reason}{CRLF}"
 
-proc feed_article_email*(article: Article, from_email: bool, article_id: int64, db: Db, smtp: SmtpConfig, reason: string) =
+proc feed_article_email*(article: Article, from_email: bool, article_id: int64, db: Db, smtp: SmtpConfig, reason: string) {.gcsafe.} =
   let rows = db.conn.getAllRows(sql"""
   SELECT  feeds.id, feeds.email, feeds.list, feeds.site_id, feeds.wildmat
   FROM    feeds

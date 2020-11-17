@@ -27,7 +27,7 @@ proc filter_email(article: Article): Article =
       new_head = new_head & head & CRLF
   return parse_article(new_head & CRLF & article.body)
 
-proc insert_article*(article: Article, from_email: bool, smtp: SmtpConfig, db: Db, reason: string, filter_email: bool = false) =
+proc insert_article*(article: Article, from_email: bool, smtp: SmtpConfig, db: Db, reason: string, filter_email: bool = false) {.gcsafe.} =
   var art = article
   if filter_email:
     art = art.filter_email()

@@ -12,7 +12,7 @@ import ../data/article
 import ../../news/messages
 import ../session
 
-proc group_thread*(ctx: Context, sess: Session[News], news: News, group: string, num, first, last, endnum: int, json: bool): Future[void] {.async.} =
+proc group_thread*(ctx: Context, sess: Session[News], news: News, group: string, num, first, last, endnum: int, json: bool): Future[void] {.async, gcsafe.} =
   let arts = await news.article_list(group, first, last, endnum)
   let roots = make_tree(arts).filterIt(it.num == num)
   let post_num = ctx.getQueryParams("post_num", "")

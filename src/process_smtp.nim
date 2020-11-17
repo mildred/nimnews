@@ -139,6 +139,7 @@ proc handleSubscribe(cx: CxState, art: Article, rcpt: LocalPart, db: Db) =
   for fromh in art.from_header.parse_name_address():
     let email = $fromh.address
     let user = db.get_or_create_user(email)
+    discard user
     let num = db.conn.insertID(sql"""
       INSERT INTO feeds (user_id, email, list, wildmat, site_id)
       SELECT users.id, ?, TRUE, ?, NULL
@@ -151,6 +152,7 @@ proc handleUnsubscribe(cx: CxState, art: Article, rcpt: LocalPart, db: Db) =
   for fromh in art.from_header.parse_name_address():
     let email = $fromh.address
     let user = db.get_or_create_user(email)
+    discard user
     let rows = db.conn.execAffectedRows(sql"""
       DELETE FROM feeds
       WERE  feeds.user_id IN (SELECT id FROM users WHERE email = ?) AND
@@ -161,7 +163,7 @@ proc handleUnsubscribe(cx: CxState, art: Article, rcpt: LocalPart, db: Db) =
 proc handleReply(cx: CxState, art: Article, rcpt: LocalPart, db: Db) =
   cx.smtp.send_email($cx.mail_from[0], rcpt.original_addr, $art)
 
-proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
+proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Response {.gcsafe.} =
   if cx.mail_from.len == 0 or cx.rcpt_to.len == 0:
     return Response(code: "503", text: "Bad sequence of commands")
   if data.is_none:
@@ -187,7 +189,7 @@ proc processData(cx: CxState, cmd: Command, data: Option[string], db: Db): Respo
   else:
     return Response(code: "250", text: &"Handled by robot")
 
-proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
+proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response {.gcsafe.} =
   case cmd.command
   of CommandNone:
     return Response(code: "500", text: "command not recognized")

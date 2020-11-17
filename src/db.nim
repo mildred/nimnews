@@ -21,7 +21,7 @@ proc close*(db: Db) =
 let anonymous_id* = 1
 let default_acl_id* = 1
 
-let dbTimeFormat* = initTimeFormat("yyyy-MM-dd HH:mm:ss")
+const dbTimeFormat* = initTimeFormat("yyyy-MM-dd HH:mm:ss")
 
 proc add_info_group(db: Db) =
   db.conn.exec(sql"DELETE FROM virt_groups")

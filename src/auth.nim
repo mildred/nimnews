@@ -34,7 +34,7 @@ type
     username: string
     mode: AuthMode
 
-  AuthSasl* = proc(challenge: string): AuthResponse
+  AuthSasl* = proc(challenge: string): AuthResponse {.gcsafe.}
 
 proc check_login_pass*(db: Db, mode: AuthMode, smtp: SmtpConfig, login, passwd: string): bool =
   let db_pass = users.get_pass(db, login)
@@ -76,7 +76,7 @@ proc auth*(auth: AuthSaslPlain, challenge: string): AuthResponse =
 
   return AuthResponse(state: AuthError)
 
-proc auth*(auth: AuthSaslScram, challenge: string): AuthResponse =
+proc auth*(auth: AuthSaslScram, challenge: string): AuthResponse {.gcsafe.} =
   let info = base64.decode(challenge)
   if auth.username == "":
     auth.username = auth.handleClientFirstMessage(info)

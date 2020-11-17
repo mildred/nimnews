@@ -54,29 +54,29 @@ type
     starttls*: bool
 
   Connection* = ref object
-    read*:     proc(): Future[Option[string]]
+    read*:     proc(): Future[Option[string]] {.gcsafe.}
     ## Read a line and return it with end line markers removed
     ## Returns none(string) at end of stream
 
-    write*:    proc(line: string): Future[void]
+    write*:    proc(line: string): Future[void] {.gcsafe.}
     ## Write a line to the client, the passed string must contain the CRLF end
     ## line marker
 
-    starttls*: proc()
+    starttls*: proc() {.gcsafe.}
     ## Start TLS handshake as server
 
-    process*:  proc(cmd: Command, body: Option[string]): Response
+    process*:  proc(cmd: Command, body: Option[string]): Response {.gcsafe.}
 
   ClientResponse* = ref object
     code*: string
     text*: string
 
   Client* = ref object
-    read*:     proc(): Future[Option[string]]
+    read*:     proc(): Future[Option[string]] {.gcsafe.}
     ## Read a line and return it with end line markers removed
     ## Returns none(string) at end of stream
 
-    write*:    proc(line: string): Future[void]
+    write*:    proc(line: string): Future[void] {.gcsafe.}
     ## Write a line to the client, the passed string must contain the CRLF end
     ## line marker
 
@@ -130,7 +130,7 @@ proc split_lines*(lines: string): seq[string] =
   stripLineEnd(content)
   return content.split(CRLF)
 
-proc write_lines*(conn: Client | Connection, content: string): Future[void] {.async.} =
+proc write_lines*(conn: Client | Connection, content: string): Future[void] {.async, gcsafe.} =
     for line in content.split_lines():
       if len(line) > 0 and line[0] == '.':
         await conn.write(&".{line}{CRLF}")

@@ -81,7 +81,7 @@ proc processStartTLS(cx: CxState, cmd: Command, db: DbConn): Response =
   else:
     return Response(code: "500", text: "command not recognized")
 
-proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
+proc processAuth(cx: CxState, cmd: Command, data: Option[string], db: Db): Response {.gcsafe.} =
   var args = cmd.args.splitWhitespace(1)
   if len(args) < 2:
     return Response(code: "500", text: "command not recognized")
@@ -249,7 +249,7 @@ proc processNewGroups(cx: CxState, cmd: Command, db: DbConn): Response =
 
   return Response(code: "231", text: "list of newsgroups follows", content: some(getGroupList(groups)))
 
-proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response =
+proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response {.gcsafe.} =
   var args = cmd.args.splitWhitespace()
   let dt = processDateTime(args)
 
@@ -292,7 +292,7 @@ proc processNewNews(cx: CxState, cmd: Command, db: DbConn): Response =
 
   return Response(code: "230", text: "list of new articles by message-id follows", content: some(list))
 
-let overview_fmt = [
+const overview_fmt = [
   "Subject:",
   "From:",
   "Date:",
@@ -372,7 +372,7 @@ proc processOver(cx: CxState, cmd: Command, db: DbConn): Response =
 
   return Response(code: "224", text: &"Overview information follows", content: some overview.join(CRLF))
 
-proc processListOverviewFmt(cx: CxState, cmd: Command, db: Db): Response =
+proc processListOverviewFmt(cx: CxState, cmd: Command, db: Db): Response {.gcsafe.} =
   return Response(code: "215", text: "Order of the fields in overview database",
     content: some(overview_fmt.join(CRLF)))
 
@@ -607,7 +607,7 @@ proc processFeedEmail(cx: CxState, cmd: Command, db: DbConn): Response =
 
   return Response(code: "290", text: &"{num} feed registered")
 
-proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response =
+proc process*(cx: CxState, cmd: Command, data: Option[string], db: Db): Response {.gcsafe.} =
   case cmd.command
   of CommandNone:
     echo &"Client wanted command {cmd.cmd_name} {cmd.args}"

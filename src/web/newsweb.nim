@@ -41,22 +41,8 @@ if args["--version"]:
   else:
     quit(1)
 
-proc closeSession(session: session.Session[News]) =
+proc closeSession(session: session.Session[News]) {.gcsafe.} =
   session.data.close()
-
-let
-  arg_log  = args["--log"]
-  settings = newSettings(
-    port = parse_port($args["--port"], def = 8080),
-    debug = arg_log,
-    address = $args["--bind"])
-  static_dir = $args["--assets"]
-  anon_news = News(
-    log:  arg_log,
-    address: $args["--nntp"],
-    port: parse_port($args["--nntp-port"], 119),
-    lock: newAsyncLock())
-  sessions_list: SessionList[News] = newSessionList[News](defaultSessionTimeout, closeSession)
 
 import controllers/root
 import controllers/register
@@ -68,77 +54,94 @@ import controllers/group_index
 import controllers/group_post
 import controllers/group_thread
 
-proc match(ctx: Context): Future[void] {.async gcsafe.} =
-  var sess: session.Session[News] = sessions_list.checkSession(ctx.request)
-  if sess == nil:
-    sess = session.Session[News](
-      data: anon_news)
+proc main(args: Table[string, Value]) =
+  let
+    arg_log  = args["--log"]
+    settings = newSettings(
+      port = parse_port($args["--port"], def = 8080),
+      debug = arg_log,
+      address = $args["--bind"])
+    static_dir = $args["--assets"]
+    anon_news = News(
+      log:  arg_log,
+      address: $args["--nntp"],
+      port: parse_port($args["--nntp-port"], 119),
+      lock: newAsyncLock())
+    sessions_list: SessionList[News] = newSessionList(defaultSessionTimeout, closeSession)
 
-  let news = sess.data
-  let path: string = ctx.request.path
+  proc match(ctx: Context): Future[void] {.async gcsafe.} =
 
-  if path == "/style.css":
-    await style(ctx, news)
+    var sess: session.Session[News] = sessions_list.checkSession(ctx.request)
+    if sess == nil:
+      sess = session.Session[News](
+        data: anon_news)
 
-  var m: Option[nre.RegexMatch]
-  m = path.match(nre.re"^/$")
-  if m.is_some:
-    await root(ctx)
+    let news = sess.data
+    let path: string = ctx.request.path
 
-  m = path.match(re"^/register$")
-  if m.is_some:
-    await register(ctx, sessions_list, anon_news)
+    if path == "/style.css":
+      await style(ctx, news)
 
-  m = path.match(re"^/login$")
-  if m.is_some:
-    await login(ctx, sessions_list, anon_news)
+    var m: Option[nre.RegexMatch]
+    m = path.match(nre.re"^/$")
+    if m.is_some:
+      await root(ctx)
 
-  m = path.match(re"^/logout$")
-  if m.is_some:
-    await logout(ctx, sessions_list)
+    m = path.match(re"^/register$")
+    if m.is_some:
+      await register(ctx, sessions_list, anon_news)
 
-  m = path.match(re"^/group(/(index\.html)?)?$")
-  if m.is_some:
-    await index(ctx, sess, news, json = false)
+    m = path.match(re"^/login$")
+    if m.is_some:
+      await login(ctx, sessions_list, anon_news)
 
-  m = path.match(re"^/group(/(index)?)?\.json$")
-  if m.is_some:
-    await index(ctx, sess, news, json = true)
+    m = path.match(re"^/logout$")
+    if m.is_some:
+      await logout(ctx, sessions_list)
 
-  m = path.match(re"^/group/([^/]*)(/(index\.html)?)?$")
-  if m.is_some:
-    if ctx.request.reqMethod == HttpPost:
-      await group_post(ctx, sess, m.get.captures[0])
-    else:
-      await group_index(ctx, sess, news, m.get.captures[0], json = false)
+    m = path.match(re"^/group(/(index\.html)?)?$")
+    if m.is_some:
+      await index(ctx, sess, news, json = false)
 
-  m = path.match(re"^/group/([^/]*)/index\.json$")
-  if m.is_some:
-    await group_index(ctx, sess, news, m.get.captures[0], json = true)
+    m = path.match(re"^/group(/(index)?)?\.json$")
+    if m.is_some:
+      await index(ctx, sess, news, json = true)
 
-  m = path.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)/?$")
-  if m.is_some:
-    await group_thread(ctx, sess, news,
-      group = m.get.captures[0],
-      num = m.get.captures[1].parse_int,
-      first = m.get.captures[2].parse_int,
-      last = m.get.captures[3].parse_int,
-      endnum = m.get.captures[4].parse_int,
-      json = false)
+    m = path.match(re"^/group/([^/]*)(/(index\.html)?)?$")
+    if m.is_some:
+      if ctx.request.reqMethod == HttpPost:
+        await group_post(ctx, sess, m.get.captures[0])
+      else:
+        await group_index(ctx, sess, news, m.get.captures[0], json = false)
 
-  m = path.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(/index)?\.json?$")
-  if m.is_some:
-    await group_thread(ctx, sess, news,
-      group = m.get.captures[0],
-      num = m.get.captures[1].parse_int,
-      first = m.get.captures[2].parse_int,
-      last = m.get.captures[3].parse_int,
-      endnum = m.get.captures[4].parse_int,
-      json = true)
+    m = path.match(re"^/group/([^/]*)/index\.json$")
+    if m.is_some:
+      await group_index(ctx, sess, news, m.get.captures[0], json = true)
+
+    m = path.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)/?$")
+    if m.is_some:
+      await group_thread(ctx, sess, news,
+        group  = m.get.captures[0],
+        num    = m.get.captures[1].parse_int,
+        first  = m.get.captures[2].parse_int,
+        last   = m.get.captures[3].parse_int,
+        endnum = m.get.captures[4].parse_int,
+        json   = false)
+
+    m = path.match(re"^/group/([^/]*)/thread/([0-9]+)-([0-9]+)-([0-9]+)-([0-9]+)(/index)?\.json?$")
+    if m.is_some:
+      await group_thread(ctx, sess, news,
+        group  = m.get.captures[0],
+        num    = m.get.captures[1].parse_int,
+        first  = m.get.captures[2].parse_int,
+        last   = m.get.captures[3].parse_int,
+        endnum = m.get.captures[4].parse_int,
+        json   = true)
 
 
-var server = newApp(settings)
-server.use(staticFileMiddleware(static_dir))
-server.all("/*$", match)
-server.run()
+  var server = newApp(settings)
+  server.use(staticFileMiddleware(static_dir))
+  server.all("/*$", match)
+  server.run()
 
+main(args)

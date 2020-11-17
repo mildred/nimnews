@@ -1,5 +1,11 @@
 import strformat, strutils, algorithm, nre
 
+proc safe_escapeRe*(str: string): string =
+  let SpecialCharMatcher = re"([\\+*?[^\]$(){}=!<>|:-])"
+  ## Escapes the string so it doesn’t match any special characters.
+  ## Incompatible with the Extra flag (``X``).
+  str.replace(SpecialCharMatcher, "\\$1")
+
 type
   Wildmat* = ref object
     patterns*: seq[WildmatPattern]
@@ -8,7 +14,7 @@ type
     pattern*: string
     regex*:   nre.Regex
 
-proc get_re(pat: string): nre.Regex =
+proc get_re(pat: string): nre.Regex {.gcsafe.} =
   var regex = ""
   for char in pat:
     case char
@@ -17,10 +23,10 @@ proc get_re(pat: string): nre.Regex =
     of '*':
       regex = regex & ".?"
     else:
-      regex = regex & escapeRe("" & char)
+      regex = regex & safe_escapeRe("" & char)
   return re(regex)
 
-proc parse_wildmat*(wildmat: string): Wildmat =
+proc parse_wildmat*(wildmat: string): Wildmat {.gcsafe.} =
   result = Wildmat(patterns: @[])
   for pat in wildmat.split(','):
     if pat.len > 0 and pat[0] == '!':

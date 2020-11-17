@@ -114,7 +114,7 @@ proc processClient(client0: AsyncSocket, secure: bool = arg_secure) {.async.} =
     smtp = arg_smtp,
     admin = arg_admin)
 
-  proc process(cmd: nntp.Command, data: Option[string]): nntp.Response =
+  proc process(cmd: nntp.Command, data: Option[string]): nntp.Response {.gcsafe.} =
     return cx.process(cmd, data, db)
 
   let conn = nntp.Connection(
@@ -135,7 +135,7 @@ proc processSmtpClient(client0: AsyncSocket) {.async.} =
     fqdn = arg_fqdn,
     smtp = arg_smtp)
 
-  proc process(cmd: smtp.Command, data: Option[string]): smtp.Response =
+  proc process(cmd: smtp.Command, data: Option[string]): smtp.Response {.gcsafe.} =
     return cx.process(cmd, data, db)
 
   let conn = smtp.Connection(

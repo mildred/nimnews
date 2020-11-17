@@ -9,7 +9,7 @@ proc param(ctx: Context, param: string): string =
   else:
     return ctx.getQueryParams(param, "")
 
-proc login*(ctx: Context, sessions: SessionList, anon_news: News): Future[void] {.async.} =
+proc login*(ctx: Context, sessions: SessionList, anon_news: News): Future[void] {.async gcsafe.} =
   let session = sessions.createSession()
   session.data = anon_news.clone()
   session.data.user = ctx.param("email")

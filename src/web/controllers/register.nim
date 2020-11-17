@@ -3,7 +3,7 @@ import prologue
 import ../nntp
 import ../session
 
-proc register*(ctx: Context, sessions: SessionList, anon_news: News): Future[void] {.async.} =
+proc register*(ctx: Context, sessions: SessionList, anon_news: News): Future[void] {.async gcsafe.} =
   let session = sessions.createSession()
   session.data = anon_news.clone()
   session.data.user = ctx.getPostParams("email", ctx.getQueryParams("email", ""))
