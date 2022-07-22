@@ -91,14 +91,54 @@ TODO
 
 - [ ] Be binary safe, end line markers are probably to blame here.
 
+
+### More ideas
+
+- HTTP interface to handle the registering and log-in process by e-mail. It
+  might just be NimNews getting the NewsWeb domain name and integrating it with
+  e-mails that are sent for login. Do not reuse the password sent by e-mail and
+  invalidate them.
+
+- Handle private groups
+    - Initial message with specific control header creates the group
+    - To belong to the group, a message must have a specific header with the
+      initial group message-id. LMTP can receive mail for a group and generate
+      this header.
+    - Private groups are only accessible to their members
+    - Groups are not encrypted (for now)
+    - Control messages can add new members or remove members
+
+- Secure messages
+    - Each user is associated with keypairs
+    - Private groups have a keypair
+    - Members of the private groups have the group private key
+    - Messages are encrypted with the group key, except some headers (the group
+      idenifying header, the Path header, the message-id, group public key)
+    - Group messages are signed by the sending member key
+    - Servers do not have access to group membership and clients must advertise
+      to the server the public group keys they wish to have access to
+    - Banning a user works by changing the private key of a group but not
+      notifying the banned user of the new key. The new key is encrypted for all
+      non-banned users.
+
+- Summarizing NNTP server
+    - A separate server that gets feed from a classic NimNews server
+    - Can have the private keys to some groups it needs to access
+    - Takes all messages in groups and present them better
+        - Provides summary of current members in private groups by collecting
+          all control messages
+        - Adds headers to existing messages to mark reactions (votes, emotes)
+    - Can be configured to follow a specific moderator, and removes moderated
+      content
+
 Build
 -----
 
     nimble install -d
-    nim c -d:ssl src/nimnews
+    nimble c src/nimnews
 
-You can omit `-d:ssl` if you don't want to compile with STARTTLS support (not
-well tested, might break).
+This will compile with `-d:ssl`, compiling without it might work but is not well
+tested.
 
 Run
 ---

@@ -18,9 +18,10 @@ requires "nim >= 1.2.0"
 
 requires "docopt"
 requires "nuuid"
-requires "scram"
 requires "passgen"
 requires "npeg"
+#requires "scram"
+requires "https://github.com/mildred/scram.nim.git#mildred-fix-compile"
 
 # NewsWeb
 
