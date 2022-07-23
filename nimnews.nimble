@@ -21,7 +21,7 @@ requires "nuuid"
 requires "passgen"
 requires "npeg"
 #requires "scram"
-requires "https://github.com/mildred/scram.nim.git#mildred-fix-compile"
+requires "https://github.com/mildred/scram.nim.git#mildred-fix-scram"
 
 # NewsWeb
 

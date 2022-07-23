@@ -1,4 +1,8 @@
-import asyncdispatch, strformat, options, strutils, tables
+import strformat, options, strutils, tables
+
+# <https://forum.nim-lang.org/t/9314>
+from asyncdispatch import Future, async, newFuture, complete
+template await[T](f: Future[T]): auto {.used.} = asyncdispatch.await(f)
 
 const CRLF* = "\c\L"
 
